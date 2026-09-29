@@ -7,7 +7,6 @@ import { useActionState } from "react";
 import { ArrowLeft, Eye, EyeOff, Lock, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { BrandLogo } from "@/components/brand-logo";
 import {
   loginAdmin,
   type AdminLoginState,
@@ -99,9 +98,7 @@ export default function AdminLoginPage() {
 
         <div className="flex flex-1 items-center justify-center px-5 py-10 sm:px-8 sm:py-14">
           <div className="bv-admin-login-enter w-full max-w-[24rem]">
-            <BrandLogo href={null} size="md" priority />
-
-            <div className="mt-7">
+            <div>
               <p className="text-[11px] font-semibold tracking-[0.2em] text-[var(--bv-teal)] uppercase">
                 Personel
               </p>
