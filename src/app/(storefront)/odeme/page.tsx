@@ -128,9 +128,11 @@ export default function CheckoutPage() {
   const [account, setAccount] = React.useState<AccountInfo | null>(null);
   const [defaultAddress, setDefaultAddress] =
     React.useState<SavedAddress | null>(null);
+  const [loadError, setLoadError] = React.useState(false);
 
   React.useEffect(() => {
     let alive = true;
+    setLoadError(false);
     getCheckoutBundle()
       .then((bundle) => {
         if (!alive) return;
@@ -155,6 +157,7 @@ export default function CheckoutPage() {
       })
       .catch(() => {
         if (!alive) return;
+        setLoadError(true);
         setItems([]);
       })
       .finally(() => {
@@ -194,6 +197,14 @@ export default function CheckoutPage() {
           ? form.get("saveAddress") === "on"
           : undefined,
       });
+      if (!result.ok) {
+        toast({
+          tone: "error",
+          title: t("toastPaymentFailedTitle"),
+          description: t("toastPaymentFailedDesc"),
+        });
+        return;
+      }
       toast({
         tone: "success",
         title: t("toastSuccessTitle"),
@@ -210,6 +221,24 @@ export default function CheckoutPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!bootstrapping && loadError) {
+    return (
+      <div className="container-bv py-16 text-center sm:py-24">
+        <h1 className="font-display text-3xl font-semibold tracking-tight">
+          {t("loadErrorTitle")}
+        </h1>
+        <p className="mt-2 text-sm text-[var(--bv-muted)]">{t("loadErrorBody")}</p>
+        <button
+          type="button"
+          className="mt-6 inline-flex h-12 items-center justify-center bg-[var(--bv-teal)] px-5 text-sm font-semibold text-white"
+          onClick={() => window.location.reload()}
+        >
+          {t("loadErrorRetry")}
+        </button>
+      </div>
+    );
   }
 
   if (!bootstrapping && items.length === 0) {

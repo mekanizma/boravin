@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { getUserPermissions } from "@/lib/auth/permissions-query";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { safeGetUser } from "@/lib/supabase/safe-auth";
+import { safeGetUser, safeSignOut } from "@/lib/supabase/safe-auth";
 
 export type AppSession = {
   user: {
@@ -41,5 +41,5 @@ export async function auth(): Promise<AppSession | null> {
 
 export async function signOutAdmin() {
   const supabase = await createSupabaseServerClient();
-  await supabase.auth.signOut();
+  await safeSignOut(supabase);
 }

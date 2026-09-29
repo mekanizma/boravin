@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { safeGetUser } from "@/lib/supabase/safe-auth";
+import { safeGetUser, safeSignOut } from "@/lib/supabase/safe-auth";
 
 export async function getCurrentCustomer() {
   const supabase = await createSupabaseServerClient();
@@ -18,5 +18,5 @@ export async function getCurrentCustomer() {
 
 export async function clearCustomerSession() {
   const supabase = await createSupabaseServerClient();
-  await supabase.auth.signOut();
+  await safeSignOut(supabase);
 }

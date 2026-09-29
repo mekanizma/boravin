@@ -35,13 +35,6 @@ export function sortProductCards(
   if (sort === "price_desc") {
     return list.sort((a, b) => Number(b.price) - Number(a.price));
   }
-  return list.sort((a, b) => {
-    const score = (p: ProductCardData) =>
-      (p.isFeatured ? 4 : 0) +
-      (p.isCampaign ? 2 : 0) +
-      (p.isNew ? 1 : 0);
-    const diff = score(b) - score(a);
-    if (diff !== 0) return diff;
-    return Number(b.price) - Number(a.price);
-  });
+  // Keep server order (featured → campaign → soldCount → createdAt).
+  return list;
 }

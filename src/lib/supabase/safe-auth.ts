@@ -41,3 +41,14 @@ export function hasSupabaseAuthCookie(
         c.name.includes("auth-token")),
   );
 }
+
+export async function safeSignOut(supabase: SupabaseClient): Promise<void> {
+  try {
+    await supabase.auth.signOut();
+  } catch (error) {
+    console.warn(
+      "[supabase] signOut failed:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}

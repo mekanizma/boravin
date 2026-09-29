@@ -14,6 +14,7 @@ import {
 import { ensureCustomerProfile } from "@/lib/account/sync-customers";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { safeSignOut } from "@/lib/supabase/safe-auth";
 
 export type RegisterState = {
   ok: boolean;
@@ -235,7 +236,7 @@ export async function loginAccount(
 
     const authUser = signInData.user;
     if (authUser.app_metadata?.kind === "admin") {
-      await supabase.auth.signOut();
+      await safeSignOut(supabase);
       return { ok: false, message: t("badCredentials") };
     }
 
@@ -269,14 +270,14 @@ export async function loginAccount(
     });
 
     if (!customer) {
-      await supabase.auth.signOut();
+      await safeSignOut(supabase);
       return { ok: false, message: t("badCredentials") };
     }
 
     const storedType =
       customer.accountType === "corporate" ? "corporate" : "individual";
     if (storedType !== accountType) {
-      await supabase.auth.signOut();
+      await safeSignOut(supabase);
       return {
         ok: false,
         message:

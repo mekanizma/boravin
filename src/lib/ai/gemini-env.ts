@@ -2,8 +2,8 @@ import "server-only";
 
 import type { RequestOptions } from "@google/generative-ai";
 
-/** Current free-tier Flash model. Older Flash ids are closed for new projects. */
-export const GEMINI_FREE_MODEL = "gemini-3.8-flash";
+/** Widely available Flash model; override with GEMINI_MODEL if needed. */
+export const GEMINI_FREE_MODEL = "gemini-2.5-flash";
 
 export function geminiApiKey(): string | null {
   const key = process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_AI_API_KEY?.trim();

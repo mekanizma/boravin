@@ -45,7 +45,11 @@ export default async function RootLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} className={`${display.variable} ${sans.variable} h-full`}>
+    <html
+      lang={locale}
+      data-scroll-behavior="smooth"
+      className={`${display.variable} ${sans.variable} h-full`}
+    >
       <body className="min-h-full bg-[var(--bv-paper)] font-sans text-[var(--bv-ink)] antialiased">
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ToastProvider>{children}</ToastProvider>

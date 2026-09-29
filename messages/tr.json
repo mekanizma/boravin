@@ -279,7 +279,12 @@
     "toastSuccessTitle": "Sipariş alındı",
     "toastSuccessDesc": "Sipariş no: {orderNumber}",
     "toastErrorTitle": "Sipariş oluşturulamadı",
-    "toastErrorDesc": "Bir sorun oluştu. Lütfen tekrar deneyin."
+    "toastErrorDesc": "Bir sorun oluştu. Lütfen tekrar deneyin.",
+    "toastPaymentFailedTitle": "Ödeme alınamadı",
+    "toastPaymentFailedDesc": "Sipariş oluşturuldu ama ödeme tamamlanmadı. Sepetiniz korundu; tekrar deneyin.",
+    "loadErrorTitle": "Ödeme sayfası yüklenemedi",
+    "loadErrorBody": "Sepet bilgileri alınamadı. Lütfen sayfayı yenileyin.",
+    "loadErrorRetry": "Yeniden dene"
   },
   "Auth": {
     "metadataTitle": "Üye ol",

@@ -302,25 +302,29 @@ export async function getCheckoutBundle() {
   } | null = null;
 
   if (customer) {
-    const rows = await db.query.addresses.findMany({
-      where: eq(addresses.customerId, customer.id),
-      orderBy: [desc(addresses.isDefault), desc(addresses.updatedAt)],
-      limit: 1,
-    });
-    defaultAddress = rows[0]
-      ? {
-          id: rows[0].id,
-          title: rows[0].title,
-          fullName: rows[0].fullName,
-          phone: rows[0].phone,
-          line1: rows[0].line1,
-          line2: rows[0].line2,
-          city: rows[0].city,
-          district: rows[0].district,
-          postalCode: rows[0].postalCode,
-          country: rows[0].country,
-        }
-      : null;
+    try {
+      const rows = await db.query.addresses.findMany({
+        where: eq(addresses.customerId, customer.id),
+        orderBy: [desc(addresses.isDefault), desc(addresses.updatedAt)],
+        limit: 1,
+      });
+      defaultAddress = rows[0]
+        ? {
+            id: rows[0].id,
+            title: rows[0].title,
+            fullName: rows[0].fullName,
+            phone: rows[0].phone,
+            line1: rows[0].line1,
+            line2: rows[0].line2,
+            city: rows[0].city,
+            district: rows[0].district,
+            postalCode: rows[0].postalCode,
+            country: rows[0].country,
+          }
+        : null;
+    } catch {
+      defaultAddress = null;
+    }
   }
 
   const account = customer
@@ -389,7 +393,10 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
   if (!cart || items.length === 0) throw new Error("EMPTY_CART");
 
   for (const item of items) {
-    if ((item.product?.stock ?? 0) < item.quantity) {
+    const available = item.variantId
+      ? (item.variant?.stock ?? 0)
+      : (item.product?.stock ?? 0);
+    if (available < item.quantity) {
       throw new Error("INSUFFICIENT_STOCK");
     }
   }
@@ -529,31 +536,40 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
     description: `Order ${orderNumber}`,
   });
 
-  if (result.success) {
-    for (const item of items) {
-      await applyStockChange({
-        productId: item.productId,
-        delta: -item.quantity,
-        type: "sale",
-        note: item.variant?.name ? `Satış · ${item.variant.name}` : "Satış",
-        reference: orderNumber,
-      });
-    }
-    await db
-      .update(orders)
-      .set({
-        paymentStatus: "paid",
-        status: "preparing",
-        updatedAt: new Date(),
-      })
-      .where(eq(orders.id, order.id));
-    await db.insert(orderStatusHistory).values({
+  if (!result.success) {
+    revalidatePath("/admin/orders");
+    return {
+      ok: false as const,
       orderId: order.id,
-      fromStatus: "awaiting_payment",
-      toStatus: "preparing",
-      note: "Ödeme alındı (mock)",
+      orderNumber,
+      payment: result,
+    };
+  }
+
+  for (const item of items) {
+    await applyStockChange({
+      productId: item.productId,
+      variantId: item.variantId,
+      delta: -item.quantity,
+      type: "sale",
+      note: item.variant?.name ? `Satış · ${item.variant.name}` : "Satış",
+      reference: orderNumber,
     });
   }
+  await db
+    .update(orders)
+    .set({
+      paymentStatus: "paid",
+      status: "preparing",
+      updatedAt: new Date(),
+    })
+    .where(eq(orders.id, order.id));
+  await db.insert(orderStatusHistory).values({
+    orderId: order.id,
+    fromStatus: "awaiting_payment",
+    toStatus: "preparing",
+    note: "Ödeme alındı (mock)",
+  });
 
   await db.delete(cartItems).where(eq(cartItems.cartId, cart.id));
   await db
@@ -563,5 +579,10 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
 
   revalidatePath("/admin/orders");
   revalidatePath("/hesabim");
-  return { orderId: order.id, orderNumber, payment: result };
+  return {
+    ok: true as const,
+    orderId: order.id,
+    orderNumber,
+    payment: result,
+  };
 }

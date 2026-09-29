@@ -35,10 +35,17 @@ export default async function AccountPage({
 
   const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ");
   const corporate = customer.accountType === "corporate";
-  const customerAddresses = await db.query.addresses.findMany({
-    where: eq(addresses.customerId, customer.id),
-    orderBy: [desc(addresses.isDefault), desc(addresses.updatedAt)],
-  });
+  let customerAddresses: Awaited<
+    ReturnType<typeof db.query.addresses.findMany>
+  > = [];
+  try {
+    customerAddresses = await db.query.addresses.findMany({
+      where: eq(addresses.customerId, customer.id),
+      orderBy: [desc(addresses.isDefault), desc(addresses.updatedAt)],
+    });
+  } catch {
+    customerAddresses = [];
+  }
 
   return (
     <section className="container-bv py-6 sm:py-12">

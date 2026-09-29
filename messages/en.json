@@ -279,7 +279,12 @@
     "toastSuccessTitle": "Order received",
     "toastSuccessDesc": "Order no: {orderNumber}",
     "toastErrorTitle": "Could not create order",
-    "toastErrorDesc": "Something went wrong. Please try again."
+    "toastErrorDesc": "Something went wrong. Please try again.",
+    "toastPaymentFailedTitle": "Payment failed",
+    "toastPaymentFailedDesc": "The order was created but payment did not complete. Your cart was kept — please try again.",
+    "loadErrorTitle": "Could not load checkout",
+    "loadErrorBody": "We could not load your cart. Please refresh the page.",
+    "loadErrorRetry": "Try again"
   },
   "Auth": {
     "metadataTitle": "Sign up",
