@@ -106,52 +106,24 @@ src/
 - SEO metadata + Product JSON-LD
 - Rate limiting, security headers
 
-## Deployment (Render)
+## Deployment (Render + Supabase)
 
-Tüm uygulama + Postgres Render üzerinde çalışır. **Auth** mevcut mimaride Supabase Auth'ta kalır (kullanıcı giriş/kayıt).
+Uygulama Render’da, **Postgres + Auth Supabase’de**.
 
-### 1. Blueprint
+### Kritik env (Render → Environment)
 
-1. Kodu GitHub/GitLab'a push edin.
-2. [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint** → bu repo.
-3. Root'taki `render.yaml` otomatik okunur: web servis + Postgres + 5 GB uploads disk.
-4. Prompt edilen secret'ları girin:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-   - `SUPABASE_SECRET_KEY`
-   - `GEMINI_API_KEY` / `GEMINI_PROJECT` (AI için)
+`DATABASE_URL` Render Postgres olmamalı. Supabase **Session Pooler** kullan:
 
-### 2. Supabase Auth redirect
-
-Supabase Dashboard → Authentication → URL Configuration:
-
-- Site URL: `https://<servis-adiniz>.onrender.com`
-- Redirect URLs: aynı origin + `/admin/**`, `/account/**` gerekirse
-
-### 3. Deploy akışı
-
-| Adım | Komut |
-|------|--------|
-| Build | `npm ci && npm run build` |
-| Pre-deploy | `npm run db:migrate:deploy` |
-| Start | `npm run start:render` (`0.0.0.0:$PORT`, uploads disk symlink) |
-
-İlk demo veri (isteğe bağlı, Shell'den):
-
-```bash
-npm run db:seed
-npm run db:sync-auth
+```
+DATABASE_PROVIDER=postgres
+DATABASE_SSL=require
+DATABASE_SSL_REJECT_UNAUTHORIZED=0
+DATABASE_URL=postgresql://postgres.[REF]:[PASSWORD]@aws-1-[REGION].pooler.supabase.com:5432/postgres
 ```
 
-### 4. Ortam özeti
+Ayrıca: `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SECRET_KEY`, `GEMINI_*`.
 
-- `DATABASE_URL` → Render Postgres (Blueprint `fromDatabase`)
-- `DATABASE_SSL=require`
-- `UPLOADS_DIR=/var/data/uploads` (kalıcı disk)
-- `NEXT_PUBLIC_APP_URL` / `AUTH_URL` → `RENDER_EXTERNAL_URL`
-- `BARCODE_GOOGLE_HEADLESS=0` (Render'da Chrome yok)
-
-Region: `frankfurt` (Kıbrıs/TR için düşük gecikme). Planlar Blueprint'te değiştirilebilir.
+Değişiklikten sonra **Manual Deploy**.
 
 ## Notlar
 
