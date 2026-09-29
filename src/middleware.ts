@@ -29,10 +29,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Storefront navigations skip middleware entirely — huge win on Render latency.
   matcher: [
-    /*
-     * Refresh auth cookies on app routes; skip static assets.
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/admin/:path*",
+    "/hesabim/:path*",
+    "/uye-ol",
   ],
 };

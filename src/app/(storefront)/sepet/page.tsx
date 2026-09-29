@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCart, getCartTotals } from "@/features/cart/actions";
+import { getCheckoutBundle } from "@/features/cart/actions";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { CartLineControls } from "@/components/storefront/cart-line-controls";
@@ -7,8 +7,7 @@ import { CartLineControls } from "@/components/storefront/cart-line-controls";
 export const metadata = { title: "Sepet" };
 
 export default async function CartPage() {
-  const { items } = await getCart();
-  const totals = await getCartTotals();
+  const { items, totals } = await getCheckoutBundle();
 
   if (!items.length) {
     return (

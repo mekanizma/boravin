@@ -277,7 +277,11 @@ export function SiteHeader() {
 
   React.useEffect(() => {
     refreshCart();
-  }, [refreshCart, pathname, cartOpen]);
+  }, [refreshCart]);
+
+  React.useEffect(() => {
+    if (cartOpen) refreshCart();
+  }, [cartOpen, refreshCart]);
 
   React.useEffect(() => {
     const onChange = () => refreshCart();

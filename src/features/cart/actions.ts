@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
 import { applyStockChange } from "@/lib/stock/apply";
+import { publicImageUrl } from "@/lib/media/url";
 
 const CART_COOKIE = "bv_cart";
 
@@ -45,42 +46,76 @@ async function getOrCreateCartId() {
   return cart;
 }
 
+export type EnrichedCartItem = Awaited<
+  ReturnType<typeof getCart>
+>["items"][number];
+
 export async function getCart() {
   try {
     const cart = await getOrCreateCartId();
-    const items = await db.query.cartItems.findMany({
-      where: eq(cartItems.cartId, cart.id),
-    });
+    const items = await db
+      .select()
+      .from(cartItems)
+      .where(eq(cartItems.cartId, cart.id));
 
-    const enriched = await Promise.all(
-      items.map(async (item) => {
-        const product = await db.query.products.findFirst({
-          where: eq(products.id, item.productId),
-        });
-        const images = product
-          ? (
-              await db
-                .select()
-                .from(productImages)
-                .where(eq(productImages.productId, product.id))
-            ).sort(
-              (a, b) =>
-                Number(b.isPrimary) - Number(a.isPrimary) ||
-                a.sortOrder - b.sortOrder,
-            )
-          : [];
-        const variant = item.variantId
-          ? await db.query.productVariants.findFirst({
-              where: eq(productVariants.id, item.variantId),
-            })
-          : null;
-        return {
-          ...item,
-          product: product ? { ...product, images } : null,
-          variant,
-        };
-      }),
-    );
+    if (!items.length) {
+      return { cart, items: [] as const };
+    }
+
+    const productIds = [...new Set(items.map((item) => item.productId))];
+    const variantIds = [
+      ...new Set(
+        items
+          .map((item) => item.variantId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    const [productRows, imageRows, variantRows] = await Promise.all([
+      db.select().from(products).where(inArray(products.id, productIds)),
+      db
+        .select()
+        .from(productImages)
+        .where(inArray(productImages.productId, productIds)),
+      variantIds.length
+        ? db
+            .select()
+            .from(productVariants)
+            .where(inArray(productVariants.id, variantIds))
+        : Promise.resolve([] as (typeof productVariants.$inferSelect)[]),
+    ]);
+
+    const productMap = new Map(productRows.map((row) => [row.id, row]));
+    const variantMap = new Map(variantRows.map((row) => [row.id, row]));
+    const imagesByProduct = new Map<string, typeof imageRows>();
+    for (const image of imageRows) {
+      const list = imagesByProduct.get(image.productId) ?? [];
+      list.push(image);
+      imagesByProduct.set(image.productId, list);
+    }
+
+    const enriched = items.map((item) => {
+      const product = productMap.get(item.productId) ?? null;
+      const images = (imagesByProduct.get(item.productId) ?? [])
+        .slice()
+        .sort(
+          (a, b) =>
+            Number(b.isPrimary) - Number(a.isPrimary) ||
+            a.sortOrder - b.sortOrder,
+        )
+        .map((image) => ({
+          ...image,
+          url: publicImageUrl(image.url) ?? image.url,
+        }));
+      const variant = item.variantId
+        ? (variantMap.get(item.variantId) ?? null)
+        : null;
+      return {
+        ...item,
+        product: product ? { ...product, images } : null,
+        variant,
+      };
+    });
 
     return { cart, items: enriched };
   } catch {
@@ -138,8 +173,8 @@ export async function addToCart(input: {
     });
   }
 
-  revalidatePath("/sepet");
-  return getCart();
+  // Avoid revalidatePath here — storefront is dynamic; skip extra work on add.
+  return { ok: true as const };
 }
 
 export async function updateCartItemQuantity(itemId: string, quantity: number) {
@@ -154,7 +189,6 @@ export async function updateCartItemQuantity(itemId: string, quantity: number) {
       .set({ quantity, updatedAt: new Date() })
       .where(and(eq(cartItems.id, itemId), eq(cartItems.cartId, cart.id)));
   }
-  revalidatePath("/sepet");
   return getCart();
 }
 
@@ -163,7 +197,6 @@ export async function removeCartItem(itemId: string) {
   await db
     .delete(cartItems)
     .where(and(eq(cartItems.id, itemId), eq(cartItems.cartId, cart.id)));
-  revalidatePath("/sepet");
   return getCart();
 }
 
@@ -177,56 +210,47 @@ export async function applyCoupon(code: string) {
     .update(carts)
     .set({ couponCode: coupon.code, updatedAt: new Date() })
     .where(eq(carts.id, cart.id));
-  revalidatePath("/sepet");
-  return getCartTotals();
+  return getCheckoutBundle();
 }
 
-export async function getCartTotals() {
-  const { cart, items } = await getCart();
-  if (!cart) {
-    return {
-      subtotal: 0,
-      discount: 0,
-      shipping: 0,
-      tax: 0,
-      grandTotal: 0,
-      currency: "TRY",
-    };
-  }
-
+function computeTotals(
+  cart: NonNullable<Awaited<ReturnType<typeof getCart>>["cart"]>,
+  items: Awaited<ReturnType<typeof getCart>>["items"],
+  shippingPrice: number,
+  freeAbove: number | null,
+  coupon:
+    | {
+        type: string;
+        value: string;
+        maxDiscount: string | null;
+      }
+    | null
+    | undefined,
+) {
   const subtotal = items.reduce(
     (sum, item) => sum + Number(item.unitPrice) * item.quantity,
     0,
   );
 
   let discount = 0;
-  if (cart.couponCode) {
-    const coupon = await db.query.coupons.findFirst({
-      where: eq(coupons.code, cart.couponCode),
-    });
-    if (coupon) {
-      if (coupon.type === "percent") {
-        discount = (subtotal * Number(coupon.value)) / 100;
-        if (coupon.maxDiscount) {
-          discount = Math.min(discount, Number(coupon.maxDiscount));
-        }
-      } else {
-        discount = Number(coupon.value);
+  if (coupon) {
+    if (coupon.type === "percent") {
+      discount = (subtotal * Number(coupon.value)) / 100;
+      if (coupon.maxDiscount) {
+        discount = Math.min(discount, Number(coupon.maxDiscount));
       }
+    } else {
+      discount = Number(coupon.value);
     }
   }
 
-  const methods = await db.query.shippingMethods.findMany({
-    where: eq(shippingMethods.isActive, true),
-  });
-  const method = methods[0];
-  let shipping = method ? Number(method.price) : 0;
-  if (method?.freeAbove && subtotal - discount >= Number(method.freeAbove)) {
+  let shipping = shippingPrice;
+  if (freeAbove != null && subtotal - discount >= freeAbove) {
     shipping = 0;
   }
 
   const taxable = Math.max(0, subtotal - discount);
-  const tax = taxable * 0.0;
+  const tax = 0;
   const grandTotal = taxable + shipping + tax;
 
   return {
@@ -238,6 +262,51 @@ export async function getCartTotals() {
     currency: cart.currency,
     couponCode: cart.couponCode,
   };
+}
+
+export async function getCartTotals() {
+  const bundle = await getCheckoutBundle();
+  return bundle.totals;
+}
+
+/** Single round-trip for checkout / summary UIs. */
+export async function getCheckoutBundle() {
+  const { cart, items } = await getCart();
+  if (!cart) {
+    return {
+      cart: null,
+      items: [],
+      totals: {
+        subtotal: 0,
+        discount: 0,
+        shipping: 0,
+        tax: 0,
+        grandTotal: 0,
+        currency: "TRY",
+        couponCode: null as string | null,
+      },
+    };
+  }
+
+  const [coupon, methods] = await Promise.all([
+    cart.couponCode
+      ? db.query.coupons.findFirst({ where: eq(coupons.code, cart.couponCode) })
+      : Promise.resolve(null),
+    db.query.shippingMethods.findMany({
+      where: eq(shippingMethods.isActive, true),
+    }),
+  ]);
+
+  const method = methods[0];
+  const totals = computeTotals(
+    cart,
+    items,
+    method ? Number(method.price) : 0,
+    method?.freeAbove ? Number(method.freeAbove) : null,
+    coupon,
+  );
+
+  return { cart, items, totals };
 }
 
 const checkoutSchema = z.object({
@@ -264,7 +333,22 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
     }
   }
 
-  const totals = await getCartTotals();
+  const [coupon, methods] = await Promise.all([
+    cart.couponCode
+      ? db.query.coupons.findFirst({ where: eq(coupons.code, cart.couponCode) })
+      : Promise.resolve(null),
+    db.query.shippingMethods.findMany({
+      where: eq(shippingMethods.isActive, true),
+    }),
+  ]);
+  const method = methods[0];
+  const totals = computeTotals(
+    cart,
+    items,
+    method ? Number(method.price) : 0,
+    method?.freeAbove ? Number(method.freeAbove) : null,
+    coupon,
+  );
   const { orders, orderItems, orderStatusHistory } = await import(
     "@/lib/db/schema"
   );
@@ -318,7 +402,6 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
     note: "Sipariş oluşturuldu",
   });
 
-  // Mock payment success
   const { getPaymentProvider } = await import("@/lib/payments");
   const payment = getPaymentProvider();
   const result = await payment.charge({

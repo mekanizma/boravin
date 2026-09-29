@@ -13,7 +13,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { getCart, getCartTotals, placeOrder } from "@/features/cart/actions";
+import { getCheckoutBundle, placeOrder } from "@/features/cart/actions";
 import { useToast } from "@/components/ui/toast";
 import { formatCurrency } from "@/lib/utils";
 
@@ -79,11 +79,11 @@ export default function CheckoutPage() {
 
   React.useEffect(() => {
     let alive = true;
-    Promise.all([getCart(), getCartTotals()])
-      .then(([cart, nextTotals]) => {
+    getCheckoutBundle()
+      .then((bundle) => {
         if (!alive) return;
         setItems(
-          (cart.items ?? []).map((item) => ({
+          (bundle.items ?? []).map((item) => ({
             id: item.id,
             name: item.product?.name ?? "Ürün",
             quantity: item.quantity,
@@ -93,13 +93,16 @@ export default function CheckoutPage() {
           })),
         );
         setTotals({
-          subtotal: Number(nextTotals.subtotal),
-          discount: Number(nextTotals.discount),
-          shipping: Number(nextTotals.shipping),
-          grandTotal: Number(nextTotals.grandTotal),
+          subtotal: Number(bundle.totals.subtotal),
+          discount: Number(bundle.totals.discount),
+          shipping: Number(bundle.totals.shipping),
+          grandTotal: Number(bundle.totals.grandTotal),
         });
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!alive) return;
+        setItems([]);
+      })
       .finally(() => {
         if (alive) setBootstrapping(false);
       });

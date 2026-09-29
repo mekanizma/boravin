@@ -120,8 +120,9 @@ function createDb(): AppDatabase {
   const sql =
     globalForDb.boravinSql ??
     postgres(connectionString, {
-      max: managedHost ? 5 : 10,
+      max: managedHost ? 8 : 10,
       idle_timeout: 20,
+      connect_timeout: 10,
       prepare: false,
       ssl,
     });

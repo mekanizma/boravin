@@ -11,9 +11,16 @@ function resolveSrc(src: ImageProps["src"] | null | undefined) {
   if (!src || typeof src !== "string") return FALLBACK;
   const trimmed = src.trim();
   if (!trimmed) return FALLBACK;
-  // Local uploads are not on Render unless the file was re-uploaded to the disk.
   if (trimmed.startsWith("/uploads/")) return FALLBACK;
   return trimmed;
+}
+
+function isCdnDirect(src: string) {
+  return (
+    src.includes("images.unsplash.com") ||
+    src.includes("picsum.photos") ||
+    src.includes("images.icecat.biz")
+  );
 }
 
 export type SafeImageProps = Omit<ImageProps, "onError" | "src"> & {
@@ -22,8 +29,8 @@ export type SafeImageProps = Omit<ImageProps, "onError" | "src"> & {
 };
 
 /**
- * next/image wrapper that swaps to a stable remote fallback when the source 404s
- * or points at a missing local /uploads path (common on Render).
+ * next/image wrapper: CDN images load directly (no Render proxy hop),
+ * broken sources fall back without crashing the page.
  */
 export function SafeImage({
   src,
@@ -53,12 +60,16 @@ export function SafeImage({
     );
   }
 
+  const cdn = typeof current === "string" && isCdnDirect(current);
+
   return (
     <Image
       {...rest}
       alt={alt}
       src={current}
       className={className}
+      unoptimized={cdn || rest.unoptimized}
+      loading={rest.priority ? undefined : (rest.loading ?? "lazy")}
       onError={() => {
         if (current !== fallbackSrc) {
           setCurrent(fallbackSrc);
