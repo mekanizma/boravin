@@ -1,9 +1,11 @@
 "use server";
 
 import { eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { signOutAdmin } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -72,4 +74,9 @@ export async function loginAdmin(
         : "Giriş sırasında bir hata oluştu. Lütfen tekrar deneyin.";
     return { ok: false, message };
   }
+}
+
+export async function logoutAdmin() {
+  await signOutAdmin();
+  redirect("/admin/login");
 }

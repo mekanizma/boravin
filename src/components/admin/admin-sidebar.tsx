@@ -28,11 +28,13 @@ import {
   Settings,
   Shield,
   ScrollText,
+  LogOut,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand-logo";
+import { logoutAdmin } from "@/features/auth/actions";
 
 const nav = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -120,6 +122,17 @@ export function AdminSidebar({
           })}
         </ul>
       </nav>
+      <div className="border-t border-[var(--bv-border)] p-2">
+        <form action={logoutAdmin}>
+          <button
+            type="submit"
+            className="flex w-full items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium text-[var(--bv-slate)] transition-colors hover:bg-[var(--bv-concrete)] hover:text-[var(--bv-ink)]"
+          >
+            <LogOut className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+            Çıkış yap
+          </button>
+        </form>
+      </div>
     </div>
   );
 
