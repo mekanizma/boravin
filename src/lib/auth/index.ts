@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { getUserPermissions } from "@/lib/auth/permissions-query";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { safeGetUser } from "@/lib/supabase/safe-auth";
 
 export type AppSession = {
   user: {
@@ -17,9 +18,7 @@ export type AppSession = {
 /** Current admin (staff) session from Supabase Auth + `users` table. */
 export async function auth(): Promise<AppSession | null> {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
+  const authUser = await safeGetUser(supabase);
   if (!authUser?.email) return null;
 
   const email = authUser.email.toLowerCase();

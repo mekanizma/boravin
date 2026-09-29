@@ -4,12 +4,17 @@ import {
   getSupabasePublishableKey,
   getSupabaseUrl,
 } from "@/lib/supabase/env";
+import { hasSupabaseAuthCookie, safeGetUser } from "@/lib/supabase/safe-auth";
 
 /** Refresh Supabase auth cookies on every matched request. */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
     request: { headers: request.headers },
   });
+
+  if (!hasSupabaseAuthCookie(request.cookies.getAll())) {
+    return { response, user: null, supabase: null };
+  }
 
   const supabase = createServerClient(
     getSupabaseUrl(),
@@ -34,9 +39,7 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await safeGetUser(supabase);
 
   return { response, user, supabase };
 }
