@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { ProductCard, type ProductCardData } from "@/components/storefront/product-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
@@ -5,18 +8,20 @@ import { cn } from "@/lib/utils";
 export function ProductGrid({
   products,
   className,
-  emptyTitle = "Ürün bulunamadı",
-  emptyDescription = "Filtreleri temizleyip tekrar deneyin.",
+  emptyTitle,
+  emptyDescription,
 }: {
   products: ProductCardData[];
   className?: string;
   emptyTitle?: string;
   emptyDescription?: string;
 }) {
+  const t = useTranslations("EmptyStates");
+  const title = emptyTitle ?? t("noProductsTitle");
+  const description = emptyDescription ?? t("noProductsBody");
+
   if (!products.length) {
-    return (
-      <EmptyState title={emptyTitle} description={emptyDescription} />
-    );
+    return <EmptyState title={title} description={description} />;
   }
 
   return (

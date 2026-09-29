@@ -1,8 +1,13 @@
-import { asc, desc, eq, ilike, and, sql, gte, lte } from "drizzle-orm";
+import { asc, eq, ilike, and, sql, gte, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { brands, categories, productImages, products } from "@/lib/db/schema";
 import type { ProductCardData } from "@/components/storefront/product-card";
 import { publicImageUrl } from "@/lib/media/url";
+import {
+  catalogSortOrderBy,
+  parseCatalogSort,
+  type CatalogSort,
+} from "@/lib/storefront/catalog-sort";
 
 export async function loadProductCards(opts?: {
   limit?: number;
@@ -14,6 +19,7 @@ export async function loadProductCards(opts?: {
   featured?: boolean;
   minPrice?: number;
   maxPrice?: number;
+  sort?: CatalogSort | string;
 }): Promise<ProductCardData[]> {
   try {
     let categoryId = opts?.categoryId;
@@ -61,7 +67,7 @@ export async function loadProductCards(opts?: {
       .from(products)
       .leftJoin(brands, eq(products.brandId, brands.id))
       .where(and(...conditions))
-      .orderBy(desc(products.createdAt))
+      .orderBy(...catalogSortOrderBy(parseCatalogSort(opts?.sort)))
       .limit(opts?.limit ?? 48);
 
     if (!rows.length) return [];

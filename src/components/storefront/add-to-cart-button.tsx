@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import { CartAddButton } from "@/components/storefront/cart-add-button";
 import { addToCart } from "@/features/cart/actions";
 import { useToast } from "@/components/ui/toast";
@@ -13,6 +14,7 @@ export function AddToCartButton({
   variantId?: string;
 }) {
   const { toast } = useToast();
+  const t = useTranslations("Toasts");
   const [loading, setLoading] = React.useState(false);
 
   async function onAdd() {
@@ -23,14 +25,14 @@ export function AddToCartButton({
       window.dispatchEvent(new Event("bv-cart-open"));
       toast({
         tone: "success",
-        title: "Sepete eklendi",
-        description: "Ürün sepetinize eklendi.",
+        title: t("addedToCart"),
+        description: t("addedToCartDesc"),
       });
     } catch {
       toast({
         tone: "error",
-        title: "Eklenemedi",
-        description: "Bir sorun oluştu. Lütfen tekrar deneyin.",
+        title: t("addFailed"),
+        description: t("genericError"),
       });
     } finally {
       setLoading(false);

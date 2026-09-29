@@ -41,6 +41,7 @@ const outboundSchema = z.object({
   buyerType: z.enum(["individual", "corporate"]),
   documentType: z.enum(["invoice", "receipt"]).default("invoice"),
   paymentMethod: z.enum(["nakit", "kredi_karti", "havale"]),
+  markPaid: z.boolean().default(true),
   customerId: z.string().uuid().optional().nullable(),
   buyerName: z.string().min(1).max(200),
   buyerTaxOffice: z.string().max(120).optional().nullable(),
@@ -286,6 +287,7 @@ export async function createProductOutbound(
   }));
   const totals = computeInvoiceTotals(invoiceLines);
   const paymentLabel = PAYMENT_METHODS[data.paymentMethod];
+  const markPaid = data.markPaid !== false;
   const documentType: InvoiceType = data.documentType;
   const orderNumber = `CK${Date.now().toString().slice(-10)}`;
   const invoiceNumber = await nextInvoiceNumber(documentType);
@@ -301,7 +303,7 @@ export async function createProductOutbound(
           orderNumber,
           customerId: data.customerId ?? null,
           status: "delivered",
-          paymentStatus: "paid",
+          paymentStatus: markPaid ? "paid" : "pending",
           paymentMethod: paymentLabel,
           currency: "TRY",
           subtotal: totals.subtotal.toFixed(2),
@@ -310,7 +312,7 @@ export async function createProductOutbound(
           taxTotal: totals.taxTotal.toFixed(2),
           grandTotal: totals.grandTotal.toFixed(2),
           guestEmail: buyerEmail,
-          adminNote: `Ürün çıkışı · ${paymentLabel}`,
+          adminNote: `Ürün çıkışı · ${paymentLabel}${markPaid ? " · ödendi" : " · ödenmedi"}`,
           customerNote: data.notes?.trim() || null,
           billingAddress: {
             fullName: data.buyerName.trim(),
@@ -350,7 +352,7 @@ export async function createProductOutbound(
       await tx.insert(orderStatusHistory).values({
         orderId: order.id,
         toStatus: "delivered",
-        note: `Admin ürün çıkışı · ${paymentLabel}`,
+        note: `Admin ürün çıkışı · ${paymentLabel}${markPaid ? " · ödendi" : ""}`,
         changedBy: session.user.id,
       });
 
@@ -394,8 +396,8 @@ export async function createProductOutbound(
           grandTotal: totals.grandTotal.toFixed(2),
           notes: data.notes?.trim() || null,
           paymentMethod: paymentLabel,
-          paymentStatus: "paid",
-          paidAmount: totals.grandTotal.toFixed(2),
+          paymentStatus: markPaid ? "paid" : "unpaid",
+          paidAmount: markPaid ? totals.grandTotal.toFixed(2) : "0",
           createdBy: session.user.id,
           issuedAt: now,
           updatedAt: now,
@@ -421,14 +423,16 @@ export async function createProductOutbound(
         })),
       );
 
-      await tx.insert(invoicePayments).values({
-        invoiceId: invoice.id,
-        amount: totals.grandTotal.toFixed(2),
-        method: paymentLabel,
-        paidAt: now,
-        note: "Ürün çıkışı — tam ödeme",
-        createdBy: session.user.id,
-      });
+      if (markPaid) {
+        await tx.insert(invoicePayments).values({
+          invoiceId: invoice.id,
+          amount: totals.grandTotal.toFixed(2),
+          method: paymentLabel,
+          paidAt: now,
+          note: "Ürün çıkışı — tam ödeme",
+          createdBy: session.user.id,
+        });
+      }
 
       if (data.customerId) {
         const customer = await tx.query.customers.findFirst({
@@ -461,6 +465,7 @@ export async function createProductOutbound(
         orderNumber,
         invoiceNumber,
         paymentMethod: paymentLabel,
+        markPaid,
         grandTotal: totals.grandTotal,
         itemCount: resolved.length,
       },
@@ -481,6 +486,7 @@ export async function createProductOutbound(
       invoiceId: result.invoice.id,
       invoiceNumber,
       grandTotal: totals.grandTotal,
+      markPaid,
     };
   } catch (error) {
     if (error instanceof StockError) {

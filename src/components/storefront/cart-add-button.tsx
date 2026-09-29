@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 
 export function CartAddButton({
@@ -15,7 +16,8 @@ export function CartAddButton({
   wrapClassName?: string;
   className?: string;
 }) {
-  const label = pending ? "Ekleniyor…" : "Sepete ekle";
+  const t = useTranslations("Cart");
+  const label = pending ? t("adding") : t("addToCart");
 
   return (
     <div className={cn("bv-cart-add-wrap", wrapClassName)}>

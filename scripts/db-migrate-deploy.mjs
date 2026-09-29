@@ -1,6 +1,11 @@
 /**
  * Production / Render pre-deploy migration (plain ESM — no tsx required).
  */
+import { config } from "dotenv";
+
+config({ path: ".env.local" });
+config();
+
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/postgres-js";

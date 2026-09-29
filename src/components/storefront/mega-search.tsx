@@ -2,9 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+
+const POPULAR_KEYS = ["popular0", "popular1", "popular2", "popular3", "popular4"] as const;
 
 export function MegaSearch({
   open,
@@ -13,19 +16,21 @@ export function MegaSearch({
   open: boolean;
   onClose: () => void;
 }) {
+  const t = useTranslations("Search");
   const [query, setQuery] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const popular = POPULAR_KEYS.map((key) => t(key));
 
   React.useEffect(() => {
     if (!open) return;
-    const t = window.setTimeout(() => inputRef.current?.focus(), 50);
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 50);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
-      window.clearTimeout(t);
+      window.clearTimeout(timer);
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
@@ -37,8 +42,8 @@ export function MegaSearch({
     <div className="fixed inset-0 z-[60] bg-[var(--bv-paper)]" role="dialog" aria-modal="true">
       <div className="container-bv flex h-full flex-col py-4 sm:py-8">
         <div className="flex items-center justify-between gap-3">
-          <p className="font-display text-lg font-semibold">Ara</p>
-          <Button variant="ghost" size="icon" aria-label="Kapat" onClick={onClose}>
+          <p className="font-display text-lg font-semibold">{t("title")}</p>
+          <Button variant="ghost" size="icon" aria-label={t("close")} onClick={onClose}>
             <X className="h-5 w-5" />
           </Button>
         </div>
@@ -55,22 +60,22 @@ export function MegaSearch({
               name="q"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ürün, marka veya kategori ara…"
+              placeholder={t("placeholder")}
               className="h-12 pl-10 text-base"
-              aria-label="Arama"
+              aria-label={t("aria")}
             />
           </div>
           <Button type="submit" variant="accent" size="lg" className="shrink-0">
-            Ara
+            {t("submit")}
           </Button>
         </form>
 
         <div className="mt-8">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--bv-muted)]">
-            Popüler
+            {t("popular")}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {["Laptop", "Kulaklık", "iPhone", "Monitor", "SSD"].map((term) => (
+            {popular.map((term) => (
               <Link
                 key={term}
                 href={`/urunler?q=${encodeURIComponent(term)}`}

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Inter_Tight } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { ToastProvider } from "@/components/ui/toast";
 import { getAppUrl } from "@/lib/env/app-url";
 import "./globals.css";
@@ -18,29 +20,36 @@ const sans = Inter_Tight({
   weight: ["400", "500", "600", "700"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "Boravin — Kıbrıs'ın Teknoloji Merkezi",
-    template: "%s | Boravin",
-  },
-  description:
-    "Boravin: Kıbrıs’ta elektronik, bilgisayar ve teknoloji ürünleri. Premium seçim, güvenilir alışveriş.",
-  metadataBase: new URL(getAppUrl()),
-  icons: {
-    icon: "/boravin-logo.png",
-    apple: "/boravin-logo.png",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("Meta");
+  return {
+    title: {
+      default: t("titleDefault"),
+      template: t("titleTemplate"),
+    },
+    description: t("description"),
+    metadataBase: new URL(getAppUrl()),
+    icons: {
+      icon: "/boravin-logo.png",
+      apple: "/boravin-logo.png",
+    },
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="tr" className={`${display.variable} ${sans.variable} h-full`}>
+    <html lang={locale} className={`${display.variable} ${sans.variable} h-full`}>
       <body className="min-h-full bg-[var(--bv-paper)] font-sans text-[var(--bv-ink)] antialiased">
-        <ToastProvider>{children}</ToastProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <ToastProvider>{children}</ToastProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

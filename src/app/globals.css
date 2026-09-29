@@ -591,33 +591,54 @@ button.bv-glitch-buy:hover::after {
 
 button.bv-cart-add {
   box-sizing: border-box;
+  position: relative;
   height: 52px;
   width: 100%;
-  background-color: #132233;
-  border: 2px solid rgb(182, 128, 128);
+  background: transparent;
+  border: 0;
   color: #eee;
-  transition: 0.6s;
   font-size: 15px;
   font-weight: 600;
-  border-radius: 50px;
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
   cursor: pointer;
   padding: 0;
+  outline: none;
+}
+
+button.bv-cart-add::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  margin-inline: auto;
+  box-sizing: border-box;
+  background-color: #132233;
+  border: 2px solid rgb(182, 128, 128);
+  border-radius: 50px;
+  transition: 0.6s;
+  z-index: 0;
+  pointer-events: none;
 }
 
 button.bv-cart-add span {
+  position: relative;
+  z-index: 1;
   transform: translateX(10px);
   transition: 0.5s;
   white-space: nowrap;
 }
 
 button.bv-cart-add svg {
+  position: relative;
+  z-index: 1;
   transform: translateX(-300px);
   transition: 0.6s;
-  z-index: 3;
   height: 20px;
   width: 20px;
   flex-shrink: 0;
@@ -634,12 +655,11 @@ button.bv-cart-add svg polyline {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bv-cart-add-wrap:hover button.bv-cart-add:not(:disabled),
-  .bv-cart-add-wrap:focus-within button.bv-cart-add:not(:disabled) {
+  .bv-cart-add-wrap:hover button.bv-cart-add:not(:disabled)::before,
+  .bv-cart-add-wrap:focus-within button.bv-cart-add:not(:disabled)::before {
     width: 52px;
     background-color: rgba(51, 34, 51, 0.815);
     box-shadow: 20px 20px 96px #bebebe, -20px -20px 96px #ffffff;
-    outline: none;
   }
 
   .bv-cart-add-wrap:hover button.bv-cart-add:not(:disabled) svg,
@@ -670,16 +690,17 @@ button.bv-cart-add:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button.bv-cart-add,
+  button.bv-cart-add::before,
   button.bv-cart-add span,
   button.bv-cart-add svg {
     transition: none;
   }
 
-  .bv-cart-add-wrap:hover button.bv-cart-add:not(:disabled),
-  .bv-cart-add-wrap:focus-within button.bv-cart-add:not(:disabled) {
+  .bv-cart-add-wrap:hover button.bv-cart-add:not(:disabled)::before,
+  .bv-cart-add-wrap:focus-within button.bv-cart-add:not(:disabled)::before {
     width: 100%;
     box-shadow: none;
+    background-color: #132233;
   }
 
   .bv-cart-add-wrap:hover button.bv-cart-add:not(:disabled) span,
@@ -895,4 +916,138 @@ button.bv-fav-pill:disabled {
     color: inherit !important;
   }
 }
+
+/* Admin barcode lookup loading */
+@keyframes bv-barcode-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bv-barcode-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes bv-barcode-bar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.bv-barcode-loading-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(14, 116, 144, 0.18), transparent 55%),
+    radial-gradient(ellipse at 70% 80%, rgba(227, 0, 15, 0.1), transparent 50%),
+    rgba(18, 20, 23, 0.58);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.bv-barcode-loading-card {
+  width: min(100%, 26rem);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(165deg, #ffffff 0%, #f4f7fa 100%);
+  box-shadow: 0 24px 60px rgba(18, 20, 23, 0.28);
+  padding: 1.5rem 1.35rem 1.35rem;
+}
+
+.bv-barcode-loading-orb {
+  position: relative;
+  margin-inline: auto;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 999px;
+  background: #0f1720;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 28px rgba(15, 23, 32, 0.28);
+}
+
+.bv-barcode-loading-orb::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 2px solid transparent;
+  border-top-color: var(--bv-teal);
+  border-right-color: rgba(14, 116, 144, 0.35);
+  animation: bv-barcode-spin 0.9s linear infinite;
+}
+
+.bv-barcode-loading-orb svg {
+  color: #fff;
+  animation: bv-barcode-pulse 1.6s ease-in-out infinite;
+}
+
+.bv-barcode-loading-progress {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  background: #e5e9ee;
+  margin-top: 1.15rem;
+}
+
+.bv-barcode-loading-progress > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  background: linear-gradient(90deg, var(--bv-teal), #00c2d1);
+  animation: bv-barcode-bar 1.15s ease-in-out infinite;
+}
+
+.bv-barcode-loading-steps {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.bv-barcode-loading-step {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.8125rem;
+  color: #8a939c;
+  transition: color 0.25s ease;
+}
+
+.bv-barcode-loading-step[data-state="active"] {
+  color: var(--bv-ink);
+  font-weight: 600;
+}
+
+.bv-barcode-loading-step[data-state="done"] {
+  color: var(--bv-teal);
+}
+
+.bv-barcode-loading-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.bv-barcode-loading-step[data-state="active"] .bv-barcode-loading-dot {
+  box-shadow: 0 0 0 4px rgba(14, 116, 144, 0.16);
+  animation: bv-barcode-pulse 1.2s ease-in-out infinite;
+}
+
 

@@ -4,9 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { SafeImage } from "@/components/ui/safe-image";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Minus, Plus, ShoppingBag, Trash2, Truck } from "lucide-react";
 import { Drawer } from "@/components/ui/drawer";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatMoney } from "@/lib/i18n/format";
 import {
   removeCartItem,
   updateCartItemQuantity,
@@ -30,6 +31,7 @@ function CartQtyControls({
   itemId: string;
   quantity: number;
 }) {
+  const t = useTranslations("Cart");
   const [pending, start] = React.useTransition();
 
   function refreshCart() {
@@ -41,7 +43,7 @@ function CartQtyControls({
       <button
         type="button"
         disabled={pending}
-        aria-label="Adeti azalt"
+        aria-label={t("decreaseQty")}
         className="inline-flex h-8 w-8 items-center justify-center text-[var(--bv-ink)] transition-colors hover:bg-[var(--bv-fog)] disabled:opacity-40"
         onClick={() =>
           start(async () => {
@@ -58,7 +60,7 @@ function CartQtyControls({
       <button
         type="button"
         disabled={pending}
-        aria-label="Adeti artır"
+        aria-label={t("increaseQty")}
         className="inline-flex h-8 w-8 items-center justify-center text-[var(--bv-ink)] transition-colors hover:bg-[var(--bv-fog)] disabled:opacity-40"
         onClick={() =>
           start(async () => {
@@ -82,6 +84,9 @@ export function CartDrawer({
   onClose: () => void;
   items?: CartDrawerItem[];
 }) {
+  const t = useTranslations("Cart");
+  const tCommon = useTranslations("Common");
+  const formatMoney = useFormatMoney();
   const router = useRouter();
   const [removing, startRemove] = React.useTransition();
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -102,10 +107,10 @@ export function CartDrawer({
       title={
         <div>
           <p className="text-[10px] font-semibold tracking-[0.16em] text-[var(--bv-muted)] uppercase">
-            Alışveriş
+            {t("eyebrow")}
           </p>
           <h2 className="mt-0.5 font-display text-lg font-semibold tracking-tight text-[var(--bv-ink)]">
-            Sepet
+            {t("title")}
             {itemCount > 0 ? (
               <span className="ml-2 align-middle text-sm font-semibold text-[var(--bv-sale)]">
                 ({itemCount})
@@ -120,14 +125,14 @@ export function CartDrawer({
             <div className="flex items-end justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold tracking-[0.12em] text-[var(--bv-muted)] uppercase">
-                  Ara toplam
+                  {t("subtotal")}
                 </p>
                 <p className="mt-0.5 text-xs text-[var(--bv-muted)]">
-                  KDV dahil · {itemCount} ürün
+                  {t("vatIncluded", { count: itemCount })}
                 </p>
               </div>
               <p className="font-display text-xl font-semibold tracking-tight tabular-nums">
-                {formatCurrency(total)}
+                {formatMoney(total)}
               </p>
             </div>
             <button
@@ -138,14 +143,14 @@ export function CartDrawer({
                 router.push("/odeme");
               }}
             >
-              Ödemeye geç
+              {t("checkout")}
             </button>
             <Link
               href="/sepet"
               onClick={onClose}
               className="flex h-11 w-full items-center justify-center border border-[var(--bv-border-strong)] text-sm font-semibold text-[var(--bv-ink)] transition-colors hover:border-[var(--bv-ink)] hover:bg-[var(--bv-fog)]"
             >
-              Sepeti görüntüle
+              {t("viewCart")}
             </Link>
           </div>
         ) : null
@@ -157,10 +162,10 @@ export function CartDrawer({
             <ShoppingBag className="h-6 w-6" strokeWidth={1.5} />
           </span>
           <h3 className="mt-5 font-display text-xl font-semibold tracking-tight">
-            Sepetiniz boş
+            {t("emptyTitle")}
           </h3>
           <p className="mt-2 max-w-[16rem] text-sm leading-relaxed text-[var(--bv-muted)]">
-            Keşfetmeye devam edin, beğendiğiniz ürünleri sepete ekleyin.
+            {t("emptyDrawerBody")}
           </p>
           <button
             type="button"
@@ -170,7 +175,7 @@ export function CartDrawer({
               router.push("/urunler");
             }}
           >
-            Ürünlere git
+            {t("goToProducts")}
           </button>
         </div>
       ) : (
@@ -184,8 +189,8 @@ export function CartDrawer({
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] font-semibold text-[var(--bv-ink)]">
                   {freeShip
-                    ? "Kargo bedava"
-                    : `${formatCurrency(shipRemaining)} daha · kargo bedava`}
+                    ? t("shipFree")
+                    : t("shipRemaining", { amount: formatMoney(shipRemaining) })}
                 </p>
                 <div className="mt-2 h-1 overflow-hidden bg-[var(--bv-border)]">
                   <div
@@ -217,7 +222,7 @@ export function CartDrawer({
                       />
                     ) : (
                       <span className="flex h-full items-center justify-center text-[10px] text-[var(--bv-muted)]">
-                        Görsel yok
+                        {tCommon("noImage")}
                       </span>
                     )}
                   </Link>
@@ -234,7 +239,7 @@ export function CartDrawer({
                       <button
                         type="button"
                         disabled={removing}
-                        aria-label={`${item.name} ürününü sil`}
+                        aria-label={t("deleteLineAria", { name: item.name })}
                         className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-[var(--bv-muted)] transition-colors hover:text-[var(--bv-sale)] disabled:opacity-40"
                         onClick={() =>
                           startRemove(async () => {
@@ -248,7 +253,7 @@ export function CartDrawer({
                     </div>
 
                     <p className="mt-1 text-[12px] text-[var(--bv-muted)]">
-                      {formatCurrency(item.unitPrice)} / adet
+                      {formatMoney(item.unitPrice)} {tCommon("perUnit")}
                     </p>
 
                     <div className="mt-auto flex items-end justify-between gap-2 pt-3">
@@ -257,7 +262,7 @@ export function CartDrawer({
                         quantity={item.quantity}
                       />
                       <p className="text-sm font-bold tabular-nums text-[var(--bv-ink)]">
-                        {formatCurrency(lineTotal)}
+                        {formatMoney(lineTotal)}
                       </p>
                     </div>
                   </div>

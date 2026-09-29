@@ -3,8 +3,14 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCategoryLabel } from "@/lib/storefront/use-category-label";
+import {
+  parseCatalogSort,
+  type CatalogSort,
+} from "@/lib/storefront/catalog-sort";
 
 export type FilterOption = {
   id: string;
@@ -35,7 +41,9 @@ function FilterLinkRow({
   active: boolean;
   onNavigate?: () => void;
 }) {
+  const categoryLabel = useCategoryLabel();
   const href = option.href ?? `/kategori/${option.id}`;
+  const label = categoryLabel({ slug: option.id, name: option.label });
 
   return (
     <li>
@@ -58,7 +66,7 @@ function FilterLinkRow({
           )}
           aria-hidden
         />
-        <span className="min-w-0 flex-1">{option.label}</span>
+        <span className="min-w-0 flex-1">{label}</span>
         {typeof option.count === "number" ? (
           <span className="shrink-0 text-[11px] tabular-nums text-[var(--bv-muted)]">
             {option.count}
@@ -80,9 +88,12 @@ function FilterGroupBlock({
   forceOpen: boolean;
   onNavigate?: () => void;
 }) {
+  const t = useTranslations("Filters");
+  const categoryLabel = useCategoryLabel();
   const [open, setOpen] = React.useState(forceOpen);
   const groupActive = activeSlug === group.id;
   const childActive = group.options.some((o) => o.id === activeSlug);
+  const label = categoryLabel({ slug: group.id, name: group.label });
 
   React.useEffect(() => {
     if (forceOpen) setOpen(true);
@@ -103,13 +114,13 @@ function FilterGroupBlock({
               : "text-[var(--bv-ink)] hover:text-[var(--bv-sale)]",
           )}
         >
-          {group.label}
+          {label}
         </Link>
         <button
           type="button"
           className="flex w-9 shrink-0 items-center justify-center text-[var(--bv-muted)] hover:text-[var(--bv-ink)]"
           aria-expanded={open}
-          aria-label={`${group.label} alt kategorileri`}
+          aria-label={t("subcategoriesAria", { label })}
           onClick={() => setOpen((v) => !v)}
         >
           <ChevronDown
@@ -138,12 +149,44 @@ function FilterGroupBlock({
   );
 }
 
+function SortSelect({
+  value,
+  onChange,
+}: {
+  value: CatalogSort;
+  onChange: (sort: CatalogSort) => void;
+}) {
+  const t = useTranslations("Filters");
+  return (
+    <section>
+      <label
+        htmlFor="catalog-sort"
+        className="text-[11px] font-semibold tracking-[0.14em] text-[var(--bv-ink)] uppercase"
+      >
+        {t("sort")}
+      </label>
+      <select
+        id="catalog-sort"
+        value={value}
+        onChange={(e) => onChange(parseCatalogSort(e.target.value))}
+        className="mt-2.5 h-10 w-full border border-[var(--bv-border-strong)] bg-[var(--bv-fog)] px-2.5 text-[13px] font-medium text-[var(--bv-ink)] transition-colors focus-visible:border-[var(--bv-ink)] focus-visible:bg-white focus-visible:outline-none"
+      >
+        <option value="recommended">{t("sortRecommended")}</option>
+        <option value="price_asc">{t("sortPriceAsc")}</option>
+        <option value="price_desc">{t("sortPriceDesc")}</option>
+      </select>
+    </section>
+  );
+}
+
 export function FilterSidebar({
   groups,
   onClear,
   priceMin,
   priceMax,
   onPriceChange,
+  sort,
+  onSortChange,
   className,
   showHeading = true,
   onNavigate,
@@ -155,13 +198,20 @@ export function FilterSidebar({
   priceMin?: string;
   priceMax?: string;
   onPriceChange?: (min: string, max: string) => void;
+  sort?: CatalogSort;
+  onSortChange?: (sort: CatalogSort) => void;
   className?: string;
   showHeading?: boolean;
   onNavigate?: () => void;
 }) {
+  const t = useTranslations("Filters");
   const pathname = usePathname();
   const activeSlug = categorySlugFromPath(pathname);
-  const hasActive = Boolean(activeSlug) || Boolean(priceMin || priceMax);
+  const sortValue = sort ?? "recommended";
+  const hasActive =
+    Boolean(activeSlug) ||
+    Boolean(priceMin || priceMax) ||
+    sortValue !== "recommended";
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -191,7 +241,7 @@ export function FilterSidebar({
         {showHeading ? (
           <div className="flex items-start justify-between gap-3">
             <h2 className="font-display text-lg font-semibold tracking-tight text-[var(--bv-ink)]">
-              Kategoriler
+              {t("categories")}
             </h2>
             {onClear && hasActive ? (
               <button
@@ -200,7 +250,7 @@ export function FilterSidebar({
                 className="inline-flex h-8 items-center gap-1 text-[12px] font-semibold text-[var(--bv-muted)] transition-colors hover:text-[var(--bv-ink)]"
               >
                 <X className="h-3.5 w-3.5" strokeWidth={2} />
-                Temizle
+                {t("clear")}
               </button>
             ) : null}
           </div>
@@ -212,7 +262,7 @@ export function FilterSidebar({
               className="inline-flex h-8 items-center gap-1 text-[12px] font-semibold text-[var(--bv-muted)] transition-colors hover:text-[var(--bv-ink)]"
             >
               <X className="h-3.5 w-3.5" strokeWidth={2} />
-              Temizle
+              {t("clear")}
             </button>
           </div>
         ) : null}
@@ -229,12 +279,12 @@ export function FilterSidebar({
               : "text-[var(--bv-slate)] hover:bg-[var(--bv-fog)] hover:text-[var(--bv-ink)]",
           )}
         >
-          Tüm ürünler
+          {t("allProducts")}
         </Link>
 
         <section>
           <p className="text-[11px] font-semibold tracking-[0.14em] text-[var(--bv-ink)] uppercase">
-            Fiyat
+            {t("price")}
           </p>
           <div className="mt-2.5 flex items-center gap-2">
             <label className="relative min-w-0 flex-1">
@@ -244,12 +294,12 @@ export function FilterSidebar({
               <input
                 type="number"
                 inputMode="numeric"
-                placeholder="Min"
+                placeholder={t("minPlaceholder")}
                 value={priceMin ?? ""}
                 onChange={(e) =>
                   onPriceChange?.(e.target.value, priceMax ?? "")
                 }
-                aria-label="Minimum fiyat"
+                aria-label={t("minAria")}
                 className="h-10 w-full border border-[var(--bv-border-strong)] bg-[var(--bv-fog)] pr-2 pl-6 text-[13px] text-[var(--bv-ink)] tabular-nums placeholder:text-[var(--bv-muted)] transition-colors focus-visible:border-[var(--bv-ink)] focus-visible:bg-white focus-visible:outline-none"
               />
             </label>
@@ -263,17 +313,21 @@ export function FilterSidebar({
               <input
                 type="number"
                 inputMode="numeric"
-                placeholder="Max"
+                placeholder={t("maxPlaceholder")}
                 value={priceMax ?? ""}
                 onChange={(e) =>
                   onPriceChange?.(priceMin ?? "", e.target.value)
                 }
-                aria-label="Maksimum fiyat"
+                aria-label={t("maxAria")}
                 className="h-10 w-full border border-[var(--bv-border-strong)] bg-[var(--bv-fog)] pr-2 pl-6 text-[13px] text-[var(--bv-ink)] tabular-nums placeholder:text-[var(--bv-muted)] transition-colors focus-visible:border-[var(--bv-ink)] focus-visible:bg-white focus-visible:outline-none"
               />
             </label>
           </div>
         </section>
+
+        {onSortChange ? (
+          <SortSelect value={sortValue} onChange={onSortChange} />
+        ) : null}
       </div>
 
       <div ref={scrollRef} className="bv-filter-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">

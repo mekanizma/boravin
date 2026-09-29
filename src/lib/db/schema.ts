@@ -173,23 +173,27 @@ export const customers = pgTable(
   (t) => [uniqueIndex("customers_email_idx").on(t.email)],
 );
 
-export const addresses = pgTable("addresses", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  customerId: uuid("customer_id")
-    .notNull()
-    .references(() => customers.id, { onDelete: "cascade" }),
-  title: varchar("title", { length: 80 }),
-  fullName: varchar("full_name", { length: 160 }).notNull(),
-  phone: varchar("phone", { length: 40 }),
-  line1: varchar("line1", { length: 255 }).notNull(),
-  line2: varchar("line2", { length: 255 }),
-  city: varchar("city", { length: 120 }).notNull(),
-  district: varchar("district", { length: 120 }),
-  country: varchar("country", { length: 2 }).default("CY").notNull(),
-  postalCode: varchar("postal_code", { length: 20 }),
-  isDefault: boolean("is_default").default(false).notNull(),
-  ...timestamps,
-});
+export const addresses = pgTable(
+  "addresses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 80 }),
+    fullName: varchar("full_name", { length: 160 }).notNull(),
+    phone: varchar("phone", { length: 40 }),
+    line1: varchar("line1", { length: 255 }).notNull(),
+    line2: varchar("line2", { length: 255 }),
+    city: varchar("city", { length: 120 }).notNull(),
+    district: varchar("district", { length: 120 }),
+    country: varchar("country", { length: 2 }).default("CY").notNull(),
+    postalCode: varchar("postal_code", { length: 20 }),
+    isDefault: boolean("is_default").default(false).notNull(),
+    ...timestamps,
+  },
+  (t) => [index("addresses_customer_id_idx").on(t.customerId)],
+);
 
 export const brands = pgTable(
   "brands",
@@ -992,6 +996,17 @@ export const shippingMethods = pgTable("shipping_methods", {
 /* Relations (selected) */
 export const usersRelations = relations(users, ({ one }) => ({
   role: one(roles, { fields: [users.roleId], references: [roles.id] }),
+}));
+
+export const customersRelations = relations(customers, ({ many }) => ({
+  addresses: many(addresses),
+}));
+
+export const addressesRelations = relations(addresses, ({ one }) => ({
+  customer: one(customers, {
+    fields: [addresses.customerId],
+    references: [customers.id],
+  }),
 }));
 
 export const productsRelations = relations(products, ({ one, many }) => ({

@@ -5,6 +5,7 @@ import {
   removeCartItem,
   updateCartItemQuantity,
 } from "@/features/cart/actions";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
@@ -15,6 +16,7 @@ export function CartLineControls({
   itemId: string;
   quantity: number;
 }) {
+  const t = useTranslations("Cart");
   const router = useRouter();
   const [pending, start] = React.useTransition();
 
@@ -24,6 +26,7 @@ export function CartLineControls({
         size="sm"
         variant="outline"
         disabled={pending}
+        aria-label={t("decreaseQty")}
         onClick={() =>
           start(async () => {
             await updateCartItemQuantity(itemId, quantity - 1);
@@ -39,6 +42,7 @@ export function CartLineControls({
         size="sm"
         variant="outline"
         disabled={pending}
+        aria-label={t("increaseQty")}
         onClick={() =>
           start(async () => {
             await updateCartItemQuantity(itemId, quantity + 1);
@@ -61,7 +65,7 @@ export function CartLineControls({
           })
         }
       >
-        Sil
+        {t("delete")}
       </Button>
     </div>
   );

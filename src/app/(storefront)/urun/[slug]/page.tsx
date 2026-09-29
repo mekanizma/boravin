@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, getDb, isTransientDbError, recoverDb } from "@/lib/db";
 import { brands, categories, productImages, productVariants, products } from "@/lib/db/schema";
-import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ProductGallery } from "@/components/storefront/product-gallery";
 import { ProductBuyPanel } from "@/components/storefront/product-buy-panel";
@@ -13,6 +12,9 @@ import { loadProductCards } from "@/lib/storefront/products";
 import { ProductGrid } from "@/components/storefront/product-grid";
 import { findMockProduct } from "@/lib/mock/storefront";
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+import { formatMoneyServer } from "@/lib/i18n/format";
+import { translateCategoryName } from "@/lib/storefront/use-category-label";
 import { publicImageUrl } from "@/lib/media/url";
 import { getCurrentCustomer } from "@/lib/account/session";
 
@@ -37,7 +39,8 @@ export async function generateMetadata({
     // Fall through to the mock catalog.
   }
   if (mock) return { title: mock.name, description: mock.brandName ?? undefined };
-  return { title: "Ürün" };
+  const t = await getTranslations("Product");
+  return { title: t("metadataFallback") };
 }
 
 async function loadProduct(slug: string) {
@@ -95,6 +98,9 @@ export default async function ProductDetailPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  const t = await getTranslations("Product");
+  const tCommon = await getTranslations("Common");
+  const tc = await getTranslations("CatalogCategories");
   const { slug } = await params;
   const product = await loadProduct(slug);
 
@@ -107,9 +113,9 @@ export default async function ProductDetailPage({
     return (
       <div className="container-bv py-6 sm:py-10">
         <nav className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--bv-muted)]">
-          <Link href="/" className="hover:text-[var(--bv-ink)]">Anasayfa</Link>
+          <Link href="/" className="hover:text-[var(--bv-ink)]">{t("breadcrumbHome")}</Link>
           <span aria-hidden>/</span>
-          <Link href="/urunler" className="hover:text-[var(--bv-ink)]">Ürünler</Link>
+          <Link href="/urunler" className="hover:text-[var(--bv-ink)]">{t("breadcrumbProducts")}</Link>
           <span aria-hidden>/</span>
           <span className="text-[var(--bv-ink)]">{mock.name}</span>
         </nav>
@@ -130,22 +136,22 @@ export default async function ProductDetailPage({
             <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
               {mock.name}
             </h1>
-            <p className="mt-3 text-sm text-[var(--bv-slate)]">Önizleme ürünü</p>
+            <p className="mt-3 text-sm text-[var(--bv-slate)]">{t("previewBadge")}</p>
             <DetailCard className="p-4 sm:p-6" stageClassName="mt-6">
               {compare && compare > price ? (
                 <p className="text-sm text-[var(--bv-muted)] line-through">
-                  {formatCurrency(compare)}
+                  {await formatMoneyServer(compare)}
                 </p>
               ) : null}
               <p className="font-display text-3xl font-semibold">
-                {formatCurrency(price)}
+                {await formatMoneyServer(price)}
               </p>
               <p className="mt-4 text-sm text-[var(--bv-slate)]">
-                Bu kart vitrin önizlemesi. Satın almak için katalogdaki satıştaki ürünü kullanın.
+                {t("previewBody")}
               </p>
               <Link href="/urunler" className="mt-6 block">
                 <Button variant="accent" size="lg" className="w-full">
-                  Ürünlere dön
+                  {t("backToProducts")}
                 </Button>
               </Link>
             </DetailCard>
@@ -153,7 +159,7 @@ export default async function ProductDetailPage({
         </div>
         {related.length ? (
           <section className="mt-14">
-            <h2 className="mb-4 font-display text-xl font-semibold">Benzer ürünler</h2>
+            <h2 className="mb-4 font-display text-xl font-semibold">{t("related")}</h2>
             <ProductGrid products={related} />
           </section>
         ) : null}
@@ -225,11 +231,11 @@ export default async function ProductDetailPage({
       />
       <nav className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--bv-muted)]">
         <Link href="/" className="hover:text-[var(--bv-ink)]">
-          Anasayfa
+          {t("breadcrumbHome")}
         </Link>
         <span aria-hidden>/</span>
         <Link href="/urunler" className="hover:text-[var(--bv-ink)]">
-          Ürünler
+          {t("breadcrumbProducts")}
         </Link>
         {product.category ? (
           <>
@@ -238,7 +244,10 @@ export default async function ProductDetailPage({
               href={`/kategori/${product.category.slug}`}
               className="hover:text-[var(--bv-ink)]"
             >
-              {product.category.name}
+              {translateCategoryName((key) => tc(key as never), {
+                slug: product.category.slug,
+                name: product.category.name,
+              })}
             </Link>
           </>
         ) : null}
@@ -267,16 +276,16 @@ export default async function ProductDetailPage({
               </p>
             ) : null}
             {product.isNew ? (
-              <span className="text-xs font-semibold text-[var(--bv-teal)]">Yeni</span>
+              <span className="text-xs font-semibold text-[var(--bv-teal)]">{t("new")}</span>
             ) : null}
             {product.isCampaign ? (
-              <span className="text-xs font-semibold text-[var(--bv-sale)]">Kampanya</span>
+              <span className="text-xs font-semibold text-[var(--bv-sale)]">{t("campaign")}</span>
             ) : null}
           </div>
           <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
             {product.name}
           </h1>
-          <p className="mt-3 text-sm text-[var(--bv-muted)]">SKU {product.sku}</p>
+          <p className="mt-3 text-sm text-[var(--bv-muted)]">{tCommon("skuLabel", { sku: product.sku })}</p>
           {product.shortDescription ? (
             <p className="mt-4 max-w-prose text-sm leading-relaxed text-[var(--bv-slate)] sm:text-base">
               {product.shortDescription}
@@ -309,14 +318,14 @@ export default async function ProductDetailPage({
       <section className="mt-12 sm:mt-16">
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.7fr)] lg:gap-6">
           <DetailCard className="p-5 sm:p-7">
-            <h2 className="font-display text-2xl font-semibold">Ürün bilgisi</h2>
+            <h2 className="font-display text-2xl font-semibold">{t("infoTitle")}</h2>
             {product.description ? (
               <p className="mt-4 max-w-prose whitespace-pre-wrap text-sm leading-7 text-[var(--bv-slate)] sm:text-base">
                 {product.description}
               </p>
             ) : (
               <p className="mt-4 text-sm text-[var(--bv-muted)]">
-                Bu ürün için açıklama eklenmemiş.
+                {t("noDescription")}
               </p>
             )}
             {specEntries.length > 0 ? (
@@ -337,10 +346,23 @@ export default async function ProductDetailPage({
             <dl className="divide-y divide-[var(--bv-border)]">
               {(
                 [
-                  ["Marka", product.brand?.name],
-                  ["Kategori", product.category?.name],
-                  ["SKU", product.sku],
-                  ["Stok", product.stock > 0 ? `${product.stock} adet` : "Tükendi"],
+                  [t("metaBrand"), product.brand?.name],
+                  [
+                    t("metaCategory"),
+                    product.category
+                      ? translateCategoryName((key) => tc(key as never), {
+                          slug: product.category.slug,
+                          name: product.category.name,
+                        })
+                      : undefined,
+                  ],
+                  [t("metaSku"), product.sku],
+                  [
+                    t("metaStock"),
+                    product.stock > 0
+                      ? tCommon("stockCount", { count: product.stock })
+                      : tCommon("outOfStock"),
+                  ],
                 ] as const
               )
                 .filter((row) => Boolean(row[1]))
@@ -362,9 +384,9 @@ export default async function ProductDetailPage({
 
       <section className="mt-14 sm:mt-16">
         <div className="mb-6 flex items-end justify-between gap-4 border-b border-[var(--bv-border)] pb-3">
-          <h2 className="font-display text-2xl font-semibold">Benzer ürünler</h2>
+          <h2 className="font-display text-2xl font-semibold">{t("related")}</h2>
           <Link href="/urunler" className="text-sm font-medium text-[var(--bv-teal)]">
-            Tüm ürünler
+            {t("allProducts")}
           </Link>
         </div>
         <ProductGrid products={related.filter((p) => p.id !== product.id)} />

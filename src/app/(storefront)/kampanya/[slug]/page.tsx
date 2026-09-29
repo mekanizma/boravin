@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db";
 import { campaigns } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -9,6 +10,7 @@ export default async function CampaignPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  const t = await getTranslations("Cms");
   const { slug } = await params;
   let campaign = null;
   try {
@@ -21,12 +23,12 @@ export default async function CampaignPage({
   if (!campaign) {
     return (
       <div className="container-bv py-16 text-center">
-        <h1 className="font-display text-3xl font-bold">Kampanya</h1>
+        <h1 className="font-display text-3xl font-bold">{t("campaignNotFoundTitle")}</h1>
         <p className="mt-2 text-[var(--bv-muted)]">
-          Kampanya bulunamadı veya henüz yayınlanmadı.
+          {t("campaignNotFoundBody")}
         </p>
         <Link href="/urunler" className="mt-6 inline-block">
-          <Button variant="accent">Ürünlere git</Button>
+          <Button variant="accent">{t("goToProducts")}</Button>
         </Link>
       </div>
     );
@@ -35,7 +37,7 @@ export default async function CampaignPage({
   return (
     <div className="container-bv py-12 sm:py-16">
       <p className="text-xs font-medium tracking-[0.18em] text-[var(--bv-copper)] uppercase">
-        Kampanya
+        {t("campaignEyebrow")}
       </p>
       <h1 className="mt-2 font-display text-4xl font-bold tracking-tight">
         {campaign.name}
@@ -51,7 +53,7 @@ export default async function CampaignPage({
         </p>
       ) : null}
       <Link href="/urunler" className="mt-8 inline-block">
-        <Button variant="accent">{campaign.cta ?? "Alışverişe başla"}</Button>
+        <Button variant="accent">{campaign.cta ?? t("defaultCta")}</Button>
       </Link>
     </div>
   );

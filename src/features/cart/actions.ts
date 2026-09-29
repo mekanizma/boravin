@@ -1,11 +1,12 @@
 "use server";
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
+  addresses,
   cartItems,
   carts,
   coupons,
@@ -17,6 +18,7 @@ import {
 import { nanoid } from "nanoid";
 import { applyStockChange } from "@/lib/stock/apply";
 import { publicImageUrl } from "@/lib/media/url";
+import { getCurrentCustomer } from "@/lib/account/session";
 
 const CART_COOKIE = "bv_cart";
 
@@ -271,20 +273,76 @@ export async function getCartTotals() {
 
 /** Single round-trip for checkout / summary UIs. */
 export async function getCheckoutBundle() {
-  const { cart, items } = await getCart();
+  const [{ cart, items }, customer] = await Promise.all([
+    getCart(),
+    getCurrentCustomer(),
+  ]);
+
+  const emptyTotals = {
+    subtotal: 0,
+    discount: 0,
+    shipping: 0,
+    tax: 0,
+    grandTotal: 0,
+    currency: "TRY",
+    couponCode: null as string | null,
+  };
+
+  let defaultAddress: {
+    id: string;
+    title: string | null;
+    fullName: string;
+    phone: string | null;
+    line1: string;
+    line2: string | null;
+    city: string;
+    district: string | null;
+    postalCode: string | null;
+    country: string;
+  } | null = null;
+
+  if (customer) {
+    const rows = await db.query.addresses.findMany({
+      where: eq(addresses.customerId, customer.id),
+      orderBy: [desc(addresses.isDefault), desc(addresses.updatedAt)],
+      limit: 1,
+    });
+    defaultAddress = rows[0]
+      ? {
+          id: rows[0].id,
+          title: rows[0].title,
+          fullName: rows[0].fullName,
+          phone: rows[0].phone,
+          line1: rows[0].line1,
+          line2: rows[0].line2,
+          city: rows[0].city,
+          district: rows[0].district,
+          postalCode: rows[0].postalCode,
+          country: rows[0].country,
+        }
+      : null;
+  }
+
+  const account = customer
+    ? {
+        id: customer.id,
+        email: customer.email,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        phone: customer.phone,
+        fullName: [customer.firstName, customer.lastName]
+          .filter(Boolean)
+          .join(" "),
+      }
+    : null;
+
   if (!cart) {
     return {
       cart: null,
       items: [],
-      totals: {
-        subtotal: 0,
-        discount: 0,
-        shipping: 0,
-        tax: 0,
-        grandTotal: 0,
-        currency: "TRY",
-        couponCode: null as string | null,
-      },
+      totals: emptyTotals,
+      account,
+      defaultAddress,
     };
   }
 
@@ -306,24 +364,27 @@ export async function getCheckoutBundle() {
     coupon,
   );
 
-  return { cart, items, totals };
+  return { cart, items, totals, account, defaultAddress };
 }
 
 const checkoutSchema = z.object({
-  email: z.string().email(),
-  fullName: z.string().min(2),
-  phone: z.string().min(7),
-  line1: z.string().min(3),
-  city: z.string().min(2),
+  email: z.string().email().optional(),
+  fullName: z.string().min(2).optional(),
+  phone: z.string().min(7).optional(),
+  line1: z.string().min(3).optional(),
+  city: z.string().min(2).optional(),
   district: z.string().optional(),
   postalCode: z.string().optional(),
   country: z.string().default("CY"),
   paymentMethod: z.string().default("mock_card"),
   customerNote: z.string().optional(),
+  addressId: z.string().uuid().optional(),
+  saveAddress: z.boolean().optional(),
 });
 
 export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
   const data = checkoutSchema.parse(raw);
+  const customer = await getCurrentCustomer();
   const { cart, items } = await getCart();
   if (!cart || items.length === 0) throw new Error("EMPTY_CART");
 
@@ -331,6 +392,70 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
     if ((item.product?.stock ?? 0) < item.quantity) {
       throw new Error("INSUFFICIENT_STOCK");
     }
+  }
+
+  let shipping = {
+    fullName: data.fullName?.trim() ?? "",
+    phone: data.phone?.trim() ?? "",
+    line1: data.line1?.trim() ?? "",
+    city: data.city?.trim() ?? "",
+    district: data.district?.trim() ?? "",
+    postalCode: data.postalCode?.trim() ?? "",
+    country: data.country || "CY",
+  };
+  let email = data.email?.trim().toLowerCase() ?? "";
+
+  if (customer) {
+    email = customer.email;
+    const accountName = [customer.firstName, customer.lastName]
+      .filter(Boolean)
+      .join(" ");
+    if (!shipping.fullName) shipping.fullName = accountName;
+    if (!shipping.phone) shipping.phone = customer.phone ?? "";
+
+    if (data.addressId) {
+      const saved = await db.query.addresses.findFirst({
+        where: and(
+          eq(addresses.id, data.addressId),
+          eq(addresses.customerId, customer.id),
+        ),
+      });
+      if (!saved) throw new Error("ADDRESS_NOT_FOUND");
+      shipping = {
+        fullName: saved.fullName,
+        phone: saved.phone ?? customer.phone ?? "",
+        line1: saved.line1,
+        city: saved.city,
+        district: saved.district ?? "",
+        postalCode: saved.postalCode ?? "",
+        country: saved.country || "CY",
+      };
+    } else if (data.saveAddress !== false && shipping.line1 && shipping.city) {
+      const existing = await db.query.addresses.findMany({
+        where: eq(addresses.customerId, customer.id),
+      });
+      if (existing.length === 0) {
+        await db.insert(addresses).values({
+          customerId: customer.id,
+          title: "Teslimat",
+          fullName: shipping.fullName || accountName || customer.email,
+          phone: shipping.phone || customer.phone,
+          line1: shipping.line1,
+          city: shipping.city,
+          district: shipping.district || null,
+          postalCode: shipping.postalCode || null,
+          country: shipping.country,
+          isDefault: true,
+        });
+      }
+    }
+  }
+
+  if (!email || shipping.fullName.length < 2 || shipping.phone.length < 7) {
+    throw new Error("INVALID_CONTACT");
+  }
+  if (shipping.line1.length < 3 || shipping.city.length < 2) {
+    throw new Error("INVALID_ADDRESS");
   }
 
   const [coupon, methods] = await Promise.all([
@@ -358,6 +483,7 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
     .insert(orders)
     .values({
       orderNumber,
+      customerId: customer?.id,
       status: "awaiting_payment",
       paymentStatus: "pending",
       paymentMethod: data.paymentMethod,
@@ -368,17 +494,9 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
       taxTotal: String(totals.tax),
       grandTotal: String(totals.grandTotal),
       couponCode: totals.couponCode,
-      guestEmail: data.email,
+      guestEmail: customer ? null : email,
       customerNote: data.customerNote,
-      shippingAddress: {
-        fullName: data.fullName,
-        phone: data.phone,
-        line1: data.line1,
-        city: data.city,
-        district: data.district ?? "",
-        postalCode: data.postalCode ?? "",
-        country: data.country,
-      },
+      shippingAddress: shipping,
     })
     .returning();
 
@@ -444,5 +562,6 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
     .where(eq(carts.id, cart.id));
 
   revalidatePath("/admin/orders");
+  revalidatePath("/hesabim");
   return { orderId: order.id, orderNumber, payment: result };
 }

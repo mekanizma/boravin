@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { ProductGrid } from "@/components/storefront/product-grid";
 import type { ProductCardData } from "@/components/storefront/product-card";
 import { HeroSlider } from "@/components/storefront/hero-slider";
@@ -10,6 +11,11 @@ import {
   MOCK_PRODUCTS,
 } from "@/lib/mock/storefront";
 import { categoryHref } from "@/lib/storefront/catalog";
+import {
+  getStorefrontLocale,
+  localizeCategoryTitle,
+  localizeHomeCopy,
+} from "@/lib/i18n/localize-content";
 
 export type HomepageSectionItem = {
   id: string;
@@ -34,79 +40,93 @@ export type HomepageSection = {
 const POPULAR = [
   {
     id: "phone",
-    title: "Telefonlar ve Eko Sistem",
+    categoryKey: "phonesEcosystem" as const,
     href: categoryHref("Telefonlar ve Eko Sistem"),
     image:
       "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=360&h=320&q=80",
   },
   {
     id: "notebook",
-    title: "Notebook",
+    categoryKey: "notebook" as const,
     href: categoryHref("Notebook"),
     image:
       "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=360&h=320&q=80",
   },
   {
     id: "tablet",
-    title: "Tabletler",
+    categoryKey: "tablets" as const,
     href: categoryHref("Tabletler"),
     image:
       "https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&w=360&h=320&q=80",
   },
   {
     id: "monitor",
-    title: "Monitörler",
+    categoryKey: "monitors" as const,
     href: categoryHref("Monitörler"),
     image:
       "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=360&h=320&q=80",
   },
   {
     id: "printer",
-    title: "Yazıcılar",
+    categoryKey: "printers" as const,
     href: categoryHref("Yazıcılar"),
     image:
       "https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?auto=format&fit=crop&w=360&h=320&q=80",
   },
   {
     id: "console",
-    title: "Oyun Konsolu ve Kolları",
+    categoryKey: "consoles" as const,
     href: categoryHref("Oyun Konsolu ve Kolları"),
     image:
       "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?auto=format&fit=crop&w=360&h=320&q=80",
   },
   {
     id: "watch",
-    title: "Akıllı Saatler",
+    categoryKey: "smartWatches" as const,
     href: categoryHref("Akıllı Saatler"),
     image:
       "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=360&h=320&q=80",
   },
   {
     id: "audio",
-    title: "Kulaklık",
+    categoryKey: "headphones" as const,
     href: categoryHref("Kulaklık"),
     image:
       "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=360&h=320&q=80",
   },
 ];
 
-function PopularCategories({ section }: { section?: HomepageSection }) {
+async function PopularCategories({ section }: { section?: HomepageSection }) {
+  const t = await getTranslations("Home");
+  const tc = await getTranslations("CatalogCategories");
+  const tCommon = await getTranslations("Common");
+  const locale = await getStorefrontLocale();
+
   const items =
     section?.items && section.items.length
       ? section.items.map((item) => ({
           id: item.id,
-          title: item.title || "Kategori",
+          title: localizeCategoryTitle(
+            locale,
+            item.title || tCommon("categoryFallback"),
+            tc,
+          ),
           href: item.linkUrl || "/urunler",
           image: item.imageUrl || POPULAR[0].image,
         }))
-      : POPULAR;
+      : POPULAR.map((item) => ({
+          id: item.id,
+          title: tc(item.categoryKey),
+          href: item.href,
+          image: item.image,
+        }));
 
   return (
     <section className="container-bv py-6 sm:py-8">
       <div className="flex flex-col gap-5 rounded-[1.25rem] bg-white p-4 shadow-[0_14px_28px_rgba(18,20,23,0.08),0_4px_0_#d5dae0] sm:flex-row sm:items-center sm:p-5">
         <div className="shrink-0 sm:w-44">
-          <p className="text-sm font-semibold text-[#222]">Öne çıkan</p>
-          <p className="text-lg font-bold text-[var(--bv-teal)]">Popüler kategoriler</p>
+          <p className="text-sm font-semibold text-[#222]">{t("popularEyebrow")}</p>
+          <p className="text-lg font-bold text-[var(--bv-teal)]">{t("popularTitle")}</p>
         </div>
         <div className="bv-stage bv-snap-x flex gap-3 overflow-x-auto px-1 pt-3 pb-4 sm:gap-5">
           {items.map((item) => (
@@ -129,7 +149,7 @@ function PopularCategories({ section }: { section?: HomepageSection }) {
   );
 }
 
-function Showcase({
+async function Showcase({
   title,
   subtitle,
   products,
@@ -138,6 +158,7 @@ function Showcase({
   subtitle?: string;
   products: ProductCardData[];
 }) {
+  const t = await getTranslations("Home");
   if (!products.length) return null;
   return (
     <section className="container-bv py-2 sm:py-4">
@@ -147,7 +168,7 @@ function Showcase({
           {subtitle ? <p className="mt-1 text-sm text-[#666]">{subtitle}</p> : null}
         </div>
         <Link href="/urunler" className="shrink-0 text-sm font-semibold text-[var(--bv-sale)]">
-          Tümünü gör
+          {t("showcaseSeeAll")}
         </Link>
       </div>
       <ProductGrid products={products.slice(0, 8)} />
@@ -155,17 +176,18 @@ function Showcase({
   );
 }
 
-function PromoRow() {
+async function PromoRow() {
+  const t = await getTranslations("Home");
   const cards = [
     {
-      title: "Oyunun kurallarını sen koy",
-      body: "Kulaklık, mouse, monitör ve konsol. Tek siparişte topla.",
+      title: t("promo0Title"),
+      body: t("promo0Body"),
       href: "/urunler?q=gaming",
       image: MOCK_CATEGORIES[2].imageUrl,
     },
     {
-      title: "Hazır sisteme göz at",
-      body: "Boravin’de seçilen kasalar. Fiyat ve stok aynı ekranda.",
+      title: t("promo1Title"),
+      body: t("promo1Body"),
       href: "/urunler",
       image: MOCK_CAMPAIGN_IMAGE,
     },
@@ -192,7 +214,7 @@ function PromoRow() {
               <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{card.title}</h2>
               <p className="mt-1 max-w-sm text-sm text-white/75">{card.body}</p>
               <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold">
-                Alışverişe başla
+                {t("promoCta")}
                 <ArrowRight className="h-4 w-4" />
               </span>
             </span>
@@ -206,7 +228,8 @@ function PromoRow() {
 const MOCK_CAMPAIGN_IMAGE =
   "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=1400&h=900&q=80";
 
-function BrandStrip({ section }: { section?: HomepageSection }) {
+async function BrandStrip({ section }: { section?: HomepageSection }) {
+  const t = await getTranslations("Home");
   const items =
     section?.items && section.items.length
       ? section.items.map((item) => ({
@@ -227,17 +250,17 @@ function BrandStrip({ section }: { section?: HomepageSection }) {
       <div className="mb-3 flex items-end justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold tracking-[0.16em] text-[var(--bv-muted)] uppercase">
-            Partnerler
+            {t("brandsEyebrow")}
           </p>
           <h2 className="mt-1 text-sm font-semibold text-[#222] sm:text-base">
-            Markalar
+            {t("brandsTitle")}
           </h2>
         </div>
         <Link
           href="/urunler"
           className="text-[12px] font-semibold text-[var(--bv-sale)] hover:text-[var(--bv-sale-hover)]"
         >
-          Tümünü gör
+          {t("brandsSeeAll")}
         </Link>
       </div>
 
@@ -260,35 +283,37 @@ function BrandStrip({ section }: { section?: HomepageSection }) {
   );
 }
 
-function NewsletterBlock({ section }: { section?: HomepageSection }) {
+async function NewsletterBlock({ section }: { section?: HomepageSection }) {
+  const t = await getTranslations("Home");
+  const locale = await getStorefrontLocale();
   return (
     <section className="border-y border-[#eee] bg-[#fafafa]">
       <div className="container-bv grid gap-4 py-8 sm:py-10 lg:grid-cols-[1.2fr_1fr] lg:items-center">
         <div>
           <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
-            {section?.title || "Kampanya ve stok haberleri"}
+            {localizeHomeCopy(locale, section?.title, t, "newsletterTitle")}
           </h2>
           <p className="mt-2 max-w-md text-sm text-[#666]">
-            {section?.subtitle || "Sadece fiyat ve stok duyuruları. İstediğin zaman çık."}
+            {localizeHomeCopy(locale, section?.subtitle, t, "newsletterSubtitle")}
           </p>
         </div>
         <form className="flex flex-col gap-2 sm:flex-row">
           <label className="sr-only" htmlFor="bv-newsletter-email">
-            E-posta
+            {t("newsletterEmailLabel")}
           </label>
           <input
             id="bv-newsletter-email"
             type="email"
             required
             name="email"
-            placeholder="E-posta adresin"
+            placeholder={t("newsletterEmailPlaceholder")}
             className="h-11 flex-1 rounded-md border border-[#ddd] bg-white px-3 text-base outline-none focus:border-black sm:text-sm"
           />
           <button
             type="submit"
             className="h-11 rounded-md bg-black px-5 text-sm font-semibold text-white hover:bg-[#333]"
           >
-            Kaydol
+            {t("newsletterSubmit")}
           </button>
         </form>
       </div>
@@ -320,13 +345,15 @@ function poolFrom(
   });
 }
 
-export function HomepageSections({
+export async function HomepageSections({
   sections,
   featuredProduct,
 }: {
   sections: HomepageSection[];
   featuredProduct?: ProductCardData | null;
 }) {
+  const t = await getTranslations("Home");
+  const locale = await getStorefrontLocale();
   const categories = sections.find((section) => section.type === "categories");
   const brands = sections.find((section) => section.type === "brands");
   const newsletter = sections.find((section) => section.type === "newsletter");
@@ -344,17 +371,34 @@ export function HomepageSections({
       <HeroSlider />
       <PopularCategories section={categories} />
       <Showcase
-        title={productSections[0]?.title || "Öne çıkan hazır sistemler"}
-        subtitle={
-          productSections[0]?.subtitle ||
-          "Boravin’de sizin için seçilen ürünlere göz atın."
-        }
+        title={localizeHomeCopy(
+          locale,
+          productSections[0]?.title,
+          t,
+          "featuredTitle",
+        )}
+        subtitle={localizeHomeCopy(
+          locale,
+          productSections[0]?.subtitle,
+          t,
+          "featuredSubtitle",
+        )}
         products={first.length ? first : pool}
       />
       <PromoRow />
       <Showcase
-        title={productSections[1]?.title || "Bu haftanın vitrini"}
-        subtitle={productSections[1]?.subtitle || "Stoktaki telefon, laptop ve ekipman."}
+        title={localizeHomeCopy(
+          locale,
+          productSections[1]?.title,
+          t,
+          "vitrineTitle",
+        )}
+        subtitle={localizeHomeCopy(
+          locale,
+          productSections[1]?.subtitle,
+          t,
+          "vitrineSubtitle",
+        )}
         products={second.length ? second : pool}
       />
       <BrandStrip section={brands} />
@@ -363,27 +407,28 @@ export function HomepageSections({
   );
 }
 
-export function FallbackHero({
+export async function FallbackHero({
   featured,
   products = [],
 }: {
   featured?: ProductCardData | null;
   products?: ProductCardData[];
 }) {
+  const t = await getTranslations("Home");
   const pool = poolFrom([], featured, products);
   return (
     <>
       <HeroSlider />
       <PopularCategories />
       <Showcase
-        title="Öne çıkan hazır sistemler"
-        subtitle="Boravin’de sizin için seçilen ürünlere göz atın."
+        title={t("featuredTitle")}
+        subtitle={t("featuredSubtitle")}
         products={pool.slice(0, 4)}
       />
       <PromoRow />
       <Showcase
-        title="Bu haftanın vitrini"
-        subtitle="Stoktaki telefon, laptop ve ekipman."
+        title={t("vitrineTitle")}
+        subtitle={t("vitrineSubtitle")}
         products={pool.slice(4, 8)}
       />
       <BrandStrip />

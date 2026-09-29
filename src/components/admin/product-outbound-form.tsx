@@ -11,6 +11,7 @@ import {
   Search,
   Trash2,
   User,
+  CheckCircle2,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,7 @@ export function ProductOutboundForm() {
   );
   const [paymentMethod, setPaymentMethod] =
     React.useState<PaymentMethodKey>("nakit");
+  const [markPaid, setMarkPaid] = React.useState(true);
 
   const [customerId, setCustomerId] = React.useState<string | null>(null);
   const [customerQuery, setCustomerQuery] = React.useState("");
@@ -285,6 +287,7 @@ export function ProductOutboundForm() {
         buyerType,
         documentType,
         paymentMethod,
+        markPaid,
         customerId,
         buyerName,
         buyerTaxOffice: buyerTaxOffice || null,
@@ -313,7 +316,9 @@ export function ProductOutboundForm() {
       toast({
         tone: "success",
         title: "Ürün çıkışı tamamlandı",
-        description: `${result.invoiceNumber} · ${formatCurrency(result.grandTotal)}`,
+        description: `${result.invoiceNumber} · ${formatCurrency(result.grandTotal)}${
+          result.markPaid ? " · Ödendi" : " · Ödenmedi"
+        }`,
       });
       router.push(`/admin/invoices/${result.invoiceId}`);
       router.refresh();
@@ -657,6 +662,41 @@ export function ProductOutboundForm() {
           </button>
         </div>
 
+        <button
+          type="button"
+          role="switch"
+          aria-checked={markPaid}
+          onClick={() => setMarkPaid((value) => !value)}
+          className={cn(
+            "mt-4 flex w-full items-start gap-3 rounded-[var(--radius-md)] border px-3.5 py-3 text-left transition-colors",
+            markPaid
+              ? "border-[var(--bv-success)] bg-[#f3fbf6]"
+              : "border-[var(--bv-border-strong)] bg-white hover:bg-[var(--bv-fog)]",
+          )}
+        >
+          <span
+            className={cn(
+              "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+              markPaid
+                ? "border-[var(--bv-success)] bg-[var(--bv-success)] text-white"
+                : "border-[var(--bv-border-strong)] bg-white",
+            )}
+            aria-hidden
+          >
+            {markPaid ? <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.5} /> : null}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-[var(--bv-ink)]">
+              Ödendi olarak işaretle
+            </span>
+            <span className="mt-0.5 block text-xs text-[var(--bv-muted)]">
+              {markPaid
+                ? "Sipariş ve fatura/makbuz ödendi kaydıyla oluşur; ödeme hareketi yazılır."
+                : "Belge ödenmedi olarak kalır. Sonradan fatura sayfasından ödeme ekleyebilirsiniz."}
+            </span>
+          </span>
+        </button>
+
         <div className="mt-4">
           <label className="text-sm font-medium text-[var(--bv-ink)]">
             Not
@@ -698,7 +738,9 @@ export function ProductOutboundForm() {
           <Plus className="h-4 w-4" />
           {saving
             ? "Kaydediliyor…"
-            : `Çıkış yap · ${formatCurrency(totals.grandTotal)}`}
+            : markPaid
+              ? `Çıkış yap · Ödendi · ${formatCurrency(totals.grandTotal)}`
+              : `Çıkış yap · ${formatCurrency(totals.grandTotal)}`}
         </Button>
       </div>
     </form>

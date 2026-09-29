@@ -2,12 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { SafeImage } from "@/components/ui/safe-image";
 import { readFavorites, toggleFavorite, type FavoriteItem } from "@/lib/favorites";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatMoney } from "@/lib/i18n/format";
 
 export function FavoritesClient() {
+  const t = useTranslations("Favorites");
+  const formatMoney = useFormatMoney();
   const [items, setItems] = React.useState<FavoriteItem[]>([]);
 
   React.useEffect(() => {
@@ -21,15 +24,13 @@ export function FavoritesClient() {
 
   return (
     <div className="container-bv py-8 sm:py-12">
-      <h1 className="font-display text-3xl font-bold">Favoriler</h1>
-      <p className="mt-2 text-sm text-[var(--bv-muted)]">
-        Favoriler bu cihazda saklanır.
-      </p>
+      <h1 className="font-display text-3xl font-bold">{t("title")}</h1>
+      <p className="mt-2 text-sm text-[var(--bv-muted)]">{t("deviceNote")}</p>
       {items.length === 0 ? (
         <div className="mt-10 text-center">
-          <p className="text-[var(--bv-slate)]">Henüz favori ürün yok.</p>
+          <p className="text-[var(--bv-slate)]">{t("empty")}</p>
           <Link href="/urunler" className="mt-6 inline-block">
-            <Button variant="accent">Ürün keşfet</Button>
+            <Button variant="accent">{t("discover")}</Button>
           </Link>
         </div>
       ) : (
@@ -54,13 +55,13 @@ export function FavoritesClient() {
                 <Link href={`/urun/${item.slug}`} className="line-clamp-2 text-sm font-semibold">
                   {item.name}
                 </Link>
-                <p className="mt-1 text-sm font-semibold">{formatCurrency(item.price)}</p>
+                <p className="mt-1 text-sm font-semibold">{formatMoney(item.price)}</p>
                 <button
                   type="button"
                   className="mt-2 text-xs font-medium text-[var(--bv-muted)] underline-offset-2 hover:underline"
                   onClick={() => remove(item)}
                 >
-                  Favorilerden çıkar
+                  {t("remove")}
                 </button>
               </div>
             </li>

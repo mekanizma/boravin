@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,8 @@ export function ProductReviewForm({
   productId: string;
   defaultName?: string;
 }) {
+  const t = useTranslations("Reviews");
+  const tToasts = useTranslations("Toasts");
   const router = useRouter();
   const { toast } = useToast();
   const [saving, setSaving] = React.useState(false);
@@ -38,25 +41,25 @@ export function ProductReviewForm({
       if (!result.ok) {
         toast({
           tone: "error",
-          title: "Yorum gönderilemedi",
+          title: tToasts("reviewFailed"),
           description:
             result.error === "VALIDATION"
-              ? "Ad, puan ve en az 10 karakter yorum girin."
-              : "Lütfen tekrar deneyin.",
+              ? tToasts("reviewValidation")
+              : tToasts("reviewRetry"),
         });
         return;
       }
       toast({
         tone: "success",
-        title: "Yorumunuz alındı",
-        description: "Yayınlanmadan önce admin onayı bekliyor.",
+        title: tToasts("reviewReceived"),
+        description: tToasts("reviewPending"),
       });
       setTitle("");
       setBody("");
       setRating(5);
       router.refresh();
     } catch {
-      toast({ tone: "error", title: "Yorum gönderilemedi" });
+      toast({ tone: "error", title: tToasts("reviewFailed") });
     } finally {
       setSaving(false);
     }
@@ -64,10 +67,8 @@ export function ProductReviewForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <p className="text-sm text-[var(--bv-muted)]">
-        Yorumunuz admin onayından sonra yayınlanır.
-      </p>
-      <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label="Puan">
+      <p className="text-sm text-[var(--bv-muted)]">{t("moderationNote")}</p>
+      <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label={t("ratingAria")}>
         {[1, 2, 3, 4, 5].map((value) => (
           <button
             key={value}
@@ -76,7 +77,7 @@ export function ProductReviewForm({
             aria-checked={rating === value}
             onClick={() => setRating(value)}
             className="rounded p-1.5 hover:bg-[var(--bv-fog)]"
-            aria-label={`${value} yıldız`}
+            aria-label={t("starAria", { value })}
           >
             <Star
               className={cn(
@@ -90,14 +91,14 @@ export function ProductReviewForm({
         ))}
       </div>
       <Input
-        label="Adınız"
+        label={t("name")}
         value={authorName}
         onChange={(e) => setAuthorName(e.target.value)}
         required
         autoComplete="name"
       />
       <Input
-        label="Başlık (isteğe bağlı)"
+        label={t("titleOptional")}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         maxLength={180}
@@ -107,7 +108,7 @@ export function ProductReviewForm({
           htmlFor={`review-body-${productId}`}
           className="text-sm font-medium text-[var(--bv-ink)]"
         >
-          Yorumunuz
+          {t("body")}
         </label>
         <textarea
           id={`review-body-${productId}`}
@@ -118,11 +119,11 @@ export function ProductReviewForm({
           maxLength={2000}
           rows={4}
           className="w-full rounded-[var(--radius-md)] border border-[var(--bv-border-strong)] bg-white px-3 py-2 text-sm text-[var(--bv-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-          placeholder="Ürün hakkında deneyiminizi yazın…"
+          placeholder={t("bodyPlaceholder")}
         />
       </div>
       <Button type="submit" disabled={saving} className="w-full sm:w-auto">
-        {saving ? "Gönderiliyor…" : "Yorum gönder"}
+        {saving ? t("submitting") : t("submit")}
       </Button>
     </form>
   );

@@ -15,7 +15,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { getCheckoutBundle, placeOrder } from "@/features/cart/actions";
 import { useToast } from "@/components/ui/toast";
-import { formatCurrency } from "@/lib/utils";
+import { useTranslations } from "next-intl";
+import { useFormatMoney } from "@/lib/i18n/format";
 
 type CheckoutItem = {
   id: string;
@@ -31,6 +32,28 @@ type CheckoutTotals = {
   discount: number;
   shipping: number;
   grandTotal: number;
+};
+
+type AccountInfo = {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  fullName: string;
+};
+
+type SavedAddress = {
+  id: string;
+  title: string | null;
+  fullName: string;
+  phone: string | null;
+  line1: string;
+  line2: string | null;
+  city: string;
+  district: string | null;
+  postalCode: string | null;
+  country: string;
 };
 
 function SectionCard({
@@ -64,7 +87,33 @@ function SectionCard({
   );
 }
 
+function NoteField({ t }: { t: ReturnType<typeof useTranslations<"Checkout">> }) {
+  return (
+    <div className="flex w-full flex-col gap-1.5">
+      <label
+        htmlFor="note"
+        className="text-sm font-medium text-[var(--bv-ink)]"
+      >
+        {t("note")}
+        <span className="ml-1 font-normal text-[var(--bv-muted)]">
+          {t("noteOptional")}
+        </span>
+      </label>
+      <textarea
+        id="note"
+        name="note"
+        rows={3}
+        placeholder={t("notePlaceholder")}
+        className="w-full resize-y border border-[var(--bv-border-strong)] bg-white px-3 py-2.5 text-sm text-[var(--bv-ink)] placeholder:text-[var(--bv-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+      />
+    </div>
+  );
+}
+
 export default function CheckoutPage() {
+  const t = useTranslations("Checkout");
+  const tCommon = useTranslations("Common");
+  const formatMoney = useFormatMoney();
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = React.useState(false);
@@ -76,6 +125,9 @@ export default function CheckoutPage() {
     shipping: 0,
     grandTotal: 0,
   });
+  const [account, setAccount] = React.useState<AccountInfo | null>(null);
+  const [defaultAddress, setDefaultAddress] =
+    React.useState<SavedAddress | null>(null);
 
   React.useEffect(() => {
     let alive = true;
@@ -85,7 +137,7 @@ export default function CheckoutPage() {
         setItems(
           (bundle.items ?? []).map((item) => ({
             id: item.id,
-            name: item.product?.name ?? "Ürün",
+            name: item.product?.name ?? tCommon("productFallback"),
             quantity: item.quantity,
             unitPrice: Number(item.unitPrice),
             imageUrl: item.product?.images?.[0]?.url ?? null,
@@ -98,6 +150,8 @@ export default function CheckoutPage() {
           shipping: Number(bundle.totals.shipping),
           grandTotal: Number(bundle.totals.grandTotal),
         });
+        setAccount(bundle.account ?? null);
+        setDefaultAddress(bundle.defaultAddress ?? null);
       })
       .catch(() => {
         if (!alive) return;
@@ -109,7 +163,7 @@ export default function CheckoutPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [tCommon]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -117,29 +171,41 @@ export default function CheckoutPage() {
     setLoading(true);
     try {
       const result = await placeOrder({
-        email: String(form.get("email")),
-        fullName: String(form.get("fullName")),
-        phone: String(form.get("phone")),
-        line1: String(form.get("line1")),
-        city: String(form.get("city")),
-        district: String(form.get("district") || ""),
-        postalCode: String(form.get("postalCode") || ""),
+        email: account?.email ?? String(form.get("email") || ""),
+        fullName: account?.fullName || String(form.get("fullName") || ""),
+        phone: account?.phone || String(form.get("phone") || ""),
+        line1: defaultAddress
+          ? defaultAddress.line1
+          : String(form.get("line1") || ""),
+        city: defaultAddress
+          ? defaultAddress.city
+          : String(form.get("city") || ""),
+        district: defaultAddress
+          ? defaultAddress.district ?? ""
+          : String(form.get("district") || ""),
+        postalCode: defaultAddress
+          ? defaultAddress.postalCode ?? ""
+          : String(form.get("postalCode") || ""),
         country: "CY",
         paymentMethod: "mock_card",
         customerNote: String(form.get("note") || ""),
+        addressId: defaultAddress?.id,
+        saveAddress: account && !defaultAddress
+          ? form.get("saveAddress") === "on"
+          : undefined,
       });
       toast({
         tone: "success",
-        title: "Sipariş alındı",
-        description: `Sipariş no: ${result.orderNumber}`,
+        title: t("toastSuccessTitle"),
+        description: t("toastSuccessDesc", { orderNumber: result.orderNumber }),
       });
       window.dispatchEvent(new Event("bv-cart-changed"));
       router.push(`/hesabim?order=${result.orderNumber}`);
     } catch {
       toast({
         tone: "error",
-        title: "Sipariş oluşturulamadı",
-        description: "Bir sorun oluştu. Lütfen tekrar deneyin.",
+        title: t("toastErrorTitle"),
+        description: t("toastErrorDesc"),
       });
     } finally {
       setLoading(false);
@@ -153,49 +219,48 @@ export default function CheckoutPage() {
           <ShoppingBag className="h-6 w-6" strokeWidth={1.5} />
         </span>
         <h1 className="mt-5 font-display text-3xl font-semibold tracking-tight">
-          Sepetiniz boş
+          {t("emptyTitle")}
         </h1>
-        <p className="mt-2 text-sm text-[var(--bv-muted)]">
-          Ödemeye geçmeden önce sepete ürün ekleyin.
-        </p>
+        <p className="mt-2 text-sm text-[var(--bv-muted)]">{t("emptyBody")}</p>
         <Link
           href="/urunler"
           className="mt-6 inline-flex h-11 items-center justify-center bg-[var(--bv-sale)] px-5 text-sm font-semibold text-white hover:bg-[var(--bv-sale-hover)]"
         >
-          Ürünlere göz at
+          {t("browseProducts")}
         </Link>
       </div>
     );
   }
 
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const isMember = Boolean(account);
+  const hasSavedAddress = Boolean(defaultAddress);
 
   return (
     <div className="container-bv py-8 sm:py-12">
       <nav className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--bv-muted)]">
         <Link href="/sepet" className="hover:text-[var(--bv-ink)]">
-          Sepet
+          {t("breadcrumbCart")}
         </Link>
         <span aria-hidden>/</span>
-        <span className="font-semibold text-[var(--bv-ink)]">Ödeme</span>
+        <span className="font-semibold text-[var(--bv-ink)]">{t("breadcrumbPay")}</span>
       </nav>
 
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-[var(--bv-border)] pb-5">
         <div>
           <p className="text-[11px] font-semibold tracking-[0.18em] text-[var(--bv-muted)] uppercase">
-            Güvenli ödeme
+            {t("secureEyebrow")}
           </p>
           <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-            Siparişi tamamla
+            {t("title")}
           </h1>
           <p className="mt-2 max-w-xl text-sm text-[var(--bv-slate)]">
-            Misafir ödeme desteklenir. Kart bilgileri test ortamında güvenli mock
-            provider ile işlenir.
+            {isMember ? t("introMember") : t("intro")}
           </p>
         </div>
         <div className="inline-flex items-center gap-2 bg-white px-3 py-2 text-[12px] font-medium text-[var(--bv-slate)]">
           <Lock className="h-3.5 w-3.5 text-[var(--bv-sale)]" strokeWidth={2} />
-          SSL korumalı ödeme
+          {t("sslBadge")}
         </div>
       </div>
 
@@ -203,93 +268,147 @@ export default function CheckoutPage() {
         <form id="checkout-form" onSubmit={onSubmit} className="space-y-4">
           <SectionCard
             icon={<UserRound className="h-4 w-4" strokeWidth={1.75} />}
-            title="İletişim"
-            subtitle="Sipariş bilgilendirmeleri bu adrese gönderilir"
+            title={t("contactTitle")}
+            subtitle={
+              isMember ? t("contactSubtitleMember") : t("contactSubtitle")
+            }
           >
-            <Input
-              label="E-posta"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              placeholder="ornek@mail.com"
-            />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Input
-                label="Ad Soyad"
-                name="fullName"
-                autoComplete="name"
-                required
-                placeholder="Adınız Soyadınız"
-              />
-              <Input
-                label="Telefon"
-                name="phone"
-                type="tel"
-                autoComplete="tel"
-                required
-                placeholder="05xx xxx xx xx"
-              />
-            </div>
+            {isMember && account ? (
+              <div className="space-y-2 text-sm text-[var(--bv-ink)]">
+                <p className="font-semibold">{account.fullName || "—"}</p>
+                <p className="break-all text-[var(--bv-slate)]">{account.email}</p>
+                {account.phone ? (
+                  <p className="text-[var(--bv-slate)]">{account.phone}</p>
+                ) : null}
+                <p className="pt-1 text-[12px] text-[var(--bv-muted)]">
+                  {t("memberContactHint")}{" "}
+                  <Link
+                    href="/hesabim"
+                    className="font-semibold text-[var(--bv-sale)] underline-offset-2 hover:underline"
+                  >
+                    {t("manageProfile")}
+                  </Link>
+                </p>
+              </div>
+            ) : (
+              <>
+                <Input
+                  label={t("email")}
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  placeholder={t("emailPlaceholder")}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Input
+                    label={t("fullName")}
+                    name="fullName"
+                    autoComplete="name"
+                    required
+                    placeholder={t("fullNamePlaceholder")}
+                  />
+                  <Input
+                    label={t("phone")}
+                    name="phone"
+                    type="tel"
+                    autoComplete="tel"
+                    required
+                    placeholder={t("phonePlaceholder")}
+                  />
+                </div>
+              </>
+            )}
           </SectionCard>
 
           <SectionCard
             icon={<MapPin className="h-4 w-4" strokeWidth={1.75} />}
-            title="Teslimat adresi"
-            subtitle="Kıbrıs içi teslimat bilgileriniz"
+            title={t("addressTitle")}
+            subtitle={
+              hasSavedAddress
+                ? t("savedAddressSubtitle")
+                : isMember
+                  ? t("addressNeededSubtitle")
+                  : t("addressSubtitle")
+            }
           >
-            <Input
-              label="Adres"
-              name="line1"
-              autoComplete="street-address"
-              required
-              placeholder="Mahalle, sokak, bina no"
-            />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Input
-                label="Şehir"
-                name="city"
-                autoComplete="address-level1"
-                required
-                placeholder="Lefkoşa"
-              />
-              <Input
-                label="İlçe"
-                name="district"
-                autoComplete="address-level2"
-                placeholder="Merkez"
-              />
-            </div>
-            <Input
-              label="Posta kodu"
-              name="postalCode"
-              autoComplete="postal-code"
-              placeholder="99010"
-            />
-            <div className="flex w-full flex-col gap-1.5">
-              <label
-                htmlFor="note"
-                className="text-sm font-medium text-[var(--bv-ink)]"
-              >
-                Sipariş notu
-                <span className="ml-1 font-normal text-[var(--bv-muted)]">
-                  (opsiyonel)
-                </span>
-              </label>
-              <textarea
-                id="note"
-                name="note"
-                rows={3}
-                placeholder="Teslimat için özel notunuz varsa yazın"
-                className="w-full resize-y border border-[var(--bv-border-strong)] bg-white px-3 py-2.5 text-sm text-[var(--bv-ink)] placeholder:text-[var(--bv-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-              />
-            </div>
+            {hasSavedAddress && defaultAddress ? (
+              <div className="space-y-1 text-sm text-[var(--bv-ink)]">
+                {defaultAddress.title ? (
+                  <p className="text-[11px] font-semibold tracking-wide text-[var(--bv-muted)] uppercase">
+                    {defaultAddress.title}
+                  </p>
+                ) : null}
+                <p className="font-semibold">{defaultAddress.fullName}</p>
+                {defaultAddress.phone ? (
+                  <p className="text-[var(--bv-slate)]">{defaultAddress.phone}</p>
+                ) : null}
+                <p className="text-[var(--bv-slate)]">{defaultAddress.line1}</p>
+                <p className="text-[var(--bv-slate)]">
+                  {[defaultAddress.district, defaultAddress.city, defaultAddress.postalCode]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+                <p className="pt-2 text-[12px] text-[var(--bv-muted)]">
+                  <Link
+                    href="/hesabim"
+                    className="font-semibold text-[var(--bv-sale)] underline-offset-2 hover:underline"
+                  >
+                    {t("manageProfile")}
+                  </Link>
+                </p>
+                <NoteField t={t} />
+              </div>
+            ) : (
+              <>
+                <Input
+                  label={t("address")}
+                  name="line1"
+                  autoComplete="street-address"
+                  required
+                  placeholder={t("addressPlaceholder")}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Input
+                    label={t("city")}
+                    name="city"
+                    autoComplete="address-level1"
+                    required
+                    placeholder={t("cityPlaceholder")}
+                  />
+                  <Input
+                    label={t("district")}
+                    name="district"
+                    autoComplete="address-level2"
+                    placeholder={t("districtPlaceholder")}
+                  />
+                </div>
+                <Input
+                  label={t("postalCode")}
+                  name="postalCode"
+                  autoComplete="postal-code"
+                  placeholder="99010"
+                />
+                {isMember ? (
+                  <label className="flex items-center gap-2 text-sm text-[var(--bv-ink)]">
+                    <input
+                      type="checkbox"
+                      name="saveAddress"
+                      defaultChecked
+                      className="accent-[var(--bv-sale)]"
+                    />
+                    {t("saveAddressToAccount")}
+                  </label>
+                ) : null}
+                <NoteField t={t} />
+              </>
+            )}
           </SectionCard>
 
           <SectionCard
             icon={<CreditCard className="h-4 w-4" strokeWidth={1.75} />}
-            title="Ödeme yöntemi"
-            subtitle="Test kartı ile güvenli mock ödeme"
+            title={t("paymentTitle")}
+            subtitle={t("paymentSubtitle")}
           >
             <label className="flex cursor-pointer items-start gap-3 border border-[var(--bv-sale)] bg-[var(--bv-sale-soft)] p-3.5">
               <input
@@ -301,25 +420,24 @@ export default function CheckoutPage() {
               />
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-[var(--bv-ink)]">
-                  Kredi / banka kartı
+                  {t("cardMethod")}
                 </span>
                 <span className="mt-0.5 block text-[12px] text-[var(--bv-slate)]">
-                  Kart bilgileri gerçek tahsilat yapılmadan mock provider ile
-                  doğrulanır.
+                  {t("cardMethodHint")}
                 </span>
               </span>
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <Input
-                label="Kart üzerindeki isim"
+                label={t("cardName")}
                 name="cardName"
                 autoComplete="cc-name"
-                placeholder="AD SOYAD"
+                placeholder={t("cardNamePlaceholder")}
                 disabled
-                hint="Demo — gerçek kart bilgisi gerekmez"
+                hint={t("cardNameHint")}
               />
               <Input
-                label="Kart numarası"
+                label={t("cardNumber")}
                 name="cardNumber"
                 autoComplete="cc-number"
                 placeholder="•••• •••• •••• ••••"
@@ -328,14 +446,14 @@ export default function CheckoutPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Input
-                label="Son kullanma"
+                label={t("cardExpiry")}
                 name="cardExpiry"
                 autoComplete="cc-exp"
-                placeholder="AA / YY"
+                placeholder={t("cardExpiryPlaceholder")}
                 disabled
               />
               <Input
-                label="CVC"
+                label={t("cardCvc")}
                 name="cardCvc"
                 autoComplete="cc-csc"
                 placeholder="•••"
@@ -344,7 +462,7 @@ export default function CheckoutPage() {
             </div>
             <p className="inline-flex items-center gap-2 text-[12px] text-[var(--bv-muted)]">
               <ShieldCheck className="h-3.5 w-3.5 text-[var(--bv-success)]" strokeWidth={2} />
-              Ödeme bilgileriniz şifrelenmiş bağlantı üzerinden iletilir.
+              {t("encryptedNote")}
             </p>
           </SectionCard>
 
@@ -355,18 +473,18 @@ export default function CheckoutPage() {
             className="flex h-12 w-full items-center justify-center bg-[var(--bv-sale)] text-sm font-bold tracking-wide text-white uppercase transition-colors hover:bg-[var(--bv-sale-hover)] disabled:cursor-not-allowed disabled:opacity-55 lg:hidden"
           >
             {loading
-              ? "İşleniyor…"
-              : `Siparişi tamamla · ${formatCurrency(totals.grandTotal)}`}
+              ? t("processing")
+              : t("completeWithTotal", { total: formatMoney(totals.grandTotal) })}
           </button>
         </form>
 
         <aside className="border border-[var(--bv-border)] bg-white lg:sticky lg:top-28">
           <div className="border-b border-[var(--bv-border)] px-4 py-4 sm:px-5">
             <p className="text-[10px] font-semibold tracking-[0.16em] text-[var(--bv-muted)] uppercase">
-              Sipariş özeti
+              {t("orderSummary")}
             </p>
             <h2 className="mt-1 font-display text-lg font-semibold tracking-tight">
-              {bootstrapping ? "Yükleniyor…" : `${itemCount} ürün`}
+              {bootstrapping ? t("loading") : t("productCount", { count: itemCount })}
             </h2>
           </div>
 
@@ -408,11 +526,11 @@ export default function CheckoutPage() {
                         {item.name}
                       </Link>
                       <p className="mt-1 text-[12px] text-[var(--bv-muted)]">
-                        {formatCurrency(item.unitPrice)}
+                        {formatMoney(item.unitPrice)}
                       </p>
                     </div>
                     <p className="shrink-0 text-[13px] font-semibold tabular-nums">
-                      {formatCurrency(item.unitPrice * item.quantity)}
+                      {formatMoney(item.unitPrice * item.quantity)}
                     </p>
                   </li>
                 ))}
@@ -420,31 +538,27 @@ export default function CheckoutPage() {
 
           <div className="space-y-2.5 border-t border-[var(--bv-border)] px-4 py-4 text-sm sm:px-5">
             <div className="flex justify-between text-[var(--bv-slate)]">
-              <span>Ara toplam</span>
-              <span className="tabular-nums">{formatCurrency(totals.subtotal)}</span>
+              <span>{t("subtotal")}</span>
+              <span className="tabular-nums">{formatMoney(totals.subtotal)}</span>
             </div>
             {totals.discount > 0 ? (
               <div className="flex justify-between text-[var(--bv-success)]">
-                <span>İndirim</span>
-                <span className="tabular-nums">
-                  −{formatCurrency(totals.discount)}
-                </span>
+                <span>{t("discount")}</span>
+                <span className="tabular-nums">−{formatMoney(totals.discount)}</span>
               </div>
             ) : null}
             <div className="flex justify-between text-[var(--bv-slate)]">
-              <span>Kargo</span>
+              <span>{t("shipping")}</span>
               <span className="tabular-nums">
-                {totals.shipping === 0
-                  ? "Ücretsiz"
-                  : formatCurrency(totals.shipping)}
+                {totals.shipping === 0 ? t("free") : formatMoney(totals.shipping)}
               </span>
             </div>
             <div className="flex items-end justify-between border-t border-[var(--bv-border)] pt-3">
               <span className="text-[11px] font-semibold tracking-[0.12em] text-[var(--bv-muted)] uppercase">
-                Toplam
+                {t("total")}
               </span>
               <span className="font-display text-2xl font-semibold tracking-tight tabular-nums">
-                {formatCurrency(totals.grandTotal)}
+                {formatMoney(totals.grandTotal)}
               </span>
             </div>
           </div>
@@ -456,13 +570,13 @@ export default function CheckoutPage() {
               disabled={loading || bootstrapping || items.length === 0}
               className="flex h-12 w-full items-center justify-center bg-[var(--bv-sale)] text-sm font-bold tracking-wide text-white uppercase transition-colors hover:bg-[var(--bv-sale-hover)] disabled:cursor-not-allowed disabled:opacity-55"
             >
-              {loading ? "İşleniyor…" : "Siparişi tamamla"}
+              {loading ? t("processing") : t("complete")}
             </button>
             <Link
               href="/sepet"
               className="mt-2 flex h-10 w-full items-center justify-center text-[13px] font-semibold text-[var(--bv-muted)] hover:text-[var(--bv-ink)]"
             >
-              Sepete dön
+              {t("backToCart")}
             </Link>
           </div>
         </aside>

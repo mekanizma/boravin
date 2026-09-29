@@ -125,6 +125,8 @@ function createDb(): AppDatabase {
       connect_timeout: 10,
       prepare: false,
       ssl,
+      // Supabase/Render: IF NOT EXISTS DDL emits NOTICE objects to stdout by default.
+      onnotice: () => {},
     });
 
   // Always reuse the pool — production previously leaked a client per request.

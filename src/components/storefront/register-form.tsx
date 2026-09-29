@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useActionState } from "react";
+import { useTranslations } from "next-intl";
 import { loginAccount, registerAccount, type RegisterState } from "@/features/account/actions";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +83,7 @@ function Choice({
 }
 
 function LoginForm({ accountType }: { accountType: AccountType }) {
+  const t = useTranslations("Auth");
   const [state, action, pending] = useActionState(loginAccount, initialState);
   const errors = state.fieldErrors ?? {};
 
@@ -95,7 +97,7 @@ function LoginForm({ accountType }: { accountType: AccountType }) {
       ) : null}
       <div className="space-y-3">
         <Field
-          label="E-posta"
+          label={t("email")}
           name="email"
           type="email"
           required
@@ -103,7 +105,7 @@ function LoginForm({ accountType }: { accountType: AccountType }) {
           error={errors.email}
         />
         <Field
-          label="Şifre"
+          label={t("password")}
           name="password"
           type="password"
           required
@@ -116,13 +118,14 @@ function LoginForm({ accountType }: { accountType: AccountType }) {
         disabled={pending}
         className="mt-5 h-12 w-full bg-[var(--bv-teal)] text-sm font-semibold text-white disabled:opacity-60"
       >
-        {pending ? "Giriş yapılıyor…" : "Giriş yap"}
+        {pending ? t("loggingIn") : t("loginSubmit")}
       </button>
     </form>
   );
 }
 
 function SignupForm({ accountType }: { accountType: AccountType }) {
+  const t = useTranslations("Auth");
   const [state, action, pending] = useActionState(registerAccount, initialState);
   const errors = state.fieldErrors ?? {};
 
@@ -137,18 +140,18 @@ function SignupForm({ accountType }: { accountType: AccountType }) {
 
       {accountType === "corporate" ? (
         <div className="mb-4 space-y-3 border-b border-[#eee] pb-4">
-          <Field label="Firma ismi" name="companyName" autoComplete="organization" error={errors.companyName} />
+          <Field label={t("companyName")} name="companyName" autoComplete="organization" error={errors.companyName} />
           <Field
-            label="Firma ünvanı"
+            label={t("companyTitle")}
             name="companyTitle"
             required
             autoComplete="organization"
             error={errors.companyTitle}
           />
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Vergi dairesi" name="taxOffice" required error={errors.taxOffice} />
+            <Field label={t("taxOffice")} name="taxOffice" required error={errors.taxOffice} />
             <Field
-              label="Vergi numarası"
+              label={t("taxNumber")}
               name="taxNumber"
               required
               inputMode="numeric"
@@ -159,13 +162,13 @@ function SignupForm({ accountType }: { accountType: AccountType }) {
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="İsim" name="firstName" required autoComplete="given-name" error={errors.firstName} />
-        <Field label="Soyisim" name="lastName" required autoComplete="family-name" error={errors.lastName} />
+        <Field label={t("firstName")} name="firstName" required autoComplete="given-name" error={errors.firstName} />
+        <Field label={t("lastName")} name="lastName" required autoComplete="family-name" error={errors.lastName} />
       </div>
       <div className="mt-3 space-y-3">
         {accountType === "individual" ? (
           <Field
-            label="Telefon"
+            label={t("phone")}
             name="phone"
             type="tel"
             required
@@ -174,10 +177,10 @@ function SignupForm({ accountType }: { accountType: AccountType }) {
             error={errors.phone}
           />
         ) : null}
-        <Field label="E-posta" name="email" type="email" required autoComplete="email" error={errors.email} />
+        <Field label={t("email")} name="email" type="email" required autoComplete="email" error={errors.email} />
         {accountType === "corporate" ? (
           <Field
-            label="Telefon"
+            label={t("phone")}
             name="phone"
             type="tel"
             required
@@ -187,7 +190,7 @@ function SignupForm({ accountType }: { accountType: AccountType }) {
           />
         ) : null}
         <Field
-          label="Şifre"
+          label={t("password")}
           name="password"
           type="password"
           required
@@ -195,7 +198,7 @@ function SignupForm({ accountType }: { accountType: AccountType }) {
           error={errors.password}
         />
         <Field
-          label="Şifre tekrarı"
+          label={t("passwordConfirm")}
           name="passwordConfirm"
           type="password"
           required
@@ -208,26 +211,27 @@ function SignupForm({ accountType }: { accountType: AccountType }) {
         disabled={pending}
         className="mt-5 h-12 w-full bg-[var(--bv-teal)] text-sm font-semibold text-white disabled:opacity-60"
       >
-        {pending ? "Kaydediliyor…" : "Hesap oluştur"}
+        {pending ? t("saving") : t("registerSubmit")}
       </button>
     </form>
   );
 }
 
 export function RegisterForm({ initialMode = "register" }: { initialMode?: Mode }) {
+  const t = useTranslations("Auth");
   const [mode, setMode] = React.useState<Mode>(initialMode);
   const [accountType, setAccountType] = React.useState<AccountType>("individual");
 
   return (
     <div>
-      <p className="text-[11px] font-semibold tracking-[0.16em] text-[#6b7280] uppercase">Hesap</p>
+      <p className="text-[11px] font-semibold tracking-[0.16em] text-[#6b7280] uppercase">
+        {t("eyebrow")}
+      </p>
       <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-[#111]">
-        {mode === "login" ? "Giriş yap" : "Üye ol"}
+        {mode === "login" ? t("loginTitle") : t("registerTitle")}
       </h1>
       <p className="mt-2 text-sm text-[#555]">
-        {mode === "login"
-          ? "Bireysel veya kurumsal hesabınızla giriş yapın."
-          : "Bireysel veya kurumsal hesap oluşturun."}
+        {mode === "login" ? t("loginSubtitle") : t("registerSubtitle")}
       </p>
 
       <div className="mt-5 space-y-2">
@@ -236,8 +240,8 @@ export function RegisterForm({ initialMode = "register" }: { initialMode?: Mode 
           current={mode}
           onChange={(value) => setMode(value as Mode)}
           options={[
-            ["login", "Giriş yap"],
-            ["register", "Üye ol"],
+            ["login", t("loginTitle")],
+            ["register", t("registerTitle")],
           ]}
         />
         <Choice
@@ -245,8 +249,8 @@ export function RegisterForm({ initialMode = "register" }: { initialMode?: Mode 
           current={accountType}
           onChange={(value) => setAccountType(value as AccountType)}
           options={[
-            ["individual", "Bireysel"],
-            ["corporate", "Kurumsal"],
+            ["individual", t("individual")],
+            ["corporate", t("corporate")],
           ]}
         />
       </div>

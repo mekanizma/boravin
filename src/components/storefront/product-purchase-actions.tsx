@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { addToCart } from "@/features/cart/actions";
 import { isFavorite, toggleFavorite, type FavoriteItem } from "@/lib/favorites";
 import { useToast } from "@/components/ui/toast";
@@ -16,6 +17,8 @@ export function ProductPurchaseActions({
   variantId?: string;
   disabled?: boolean;
 }) {
+  const t = useTranslations("Product");
+  const tToasts = useTranslations("Toasts");
   const router = useRouter();
   const { toast } = useToast();
   const [saved, setSaved] = React.useState(false);
@@ -30,7 +33,7 @@ export function ProductPurchaseActions({
     setSaved(nowSaved);
     toast({
       tone: nowSaved ? "success" : "info",
-      title: nowSaved ? "Favorilere eklendi" : "Favorilerden çıkarıldı",
+      title: nowSaved ? tToasts("favoriteAdded") : tToasts("favoriteRemoved"),
       description: product.name,
     });
   }
@@ -47,30 +50,32 @@ export function ProductPurchaseActions({
       window.dispatchEvent(new Event("bv-cart-open"));
       toast({
         tone: "success",
-        title: "Sepete eklendi",
+        title: tToasts("addedToCart"),
         description: product.name,
       });
     } catch {
       toast({
         tone: "error",
-        title: "Eklenemedi",
-        description: "Ürün sepete eklenemedi. Lütfen tekrar deneyin.",
+        title: tToasts("addFailed"),
+        description: tToasts("addFailedDesc"),
       });
     } finally {
       setPending(null);
     }
   }
 
+  const buyLabel = pending === "buy" ? t("redirecting") : t("buy");
+
   return (
     <div className="mt-5 grid grid-cols-1 gap-2">
       <button
         type="button"
         className="bv-glitch-buy"
-        data-label={pending === "buy" ? "Yönlendiriliyor" : "Satın al"}
+        data-label={buyLabel}
         disabled={disabled || pending !== null}
         onClick={() => onAdd(true)}
       >
-        {pending === "buy" ? "Yönlendiriliyor" : "Satın al"}
+        {buyLabel}
       </button>
       <CartAddButton
         pending={pending === "cart"}
@@ -88,7 +93,7 @@ export function ProductPurchaseActions({
         <span className="icon" aria-hidden>
           ❤️
         </span>
-        <span className="title">{saved ? "Favorilerde" : "Favoriye ekle"}</span>
+        <span className="title">{saved ? t("inFavorites") : t("addFavorite")}</span>
       </button>
     </div>
   );

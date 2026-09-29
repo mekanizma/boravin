@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   ChevronDown,
   ChevronRight,
@@ -14,31 +15,32 @@ import {
   User,
   X,
 } from "lucide-react";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { CartDrawer, type CartDrawerItem } from "@/components/storefront/cart-drawer";
+import { LanguageSwitcher } from "@/components/storefront/language-switcher";
 import { BrandLogo } from "@/components/brand-logo";
 import { getCart } from "@/features/cart/actions";
+import { useFormatMoney } from "@/lib/i18n/format";
+import { useCategoryLabel } from "@/lib/storefront/use-category-label";
 import {
   categoryHref,
   STORE_CATEGORIES,
   type CatalogNode,
 } from "@/lib/storefront/catalog";
 
-const utilityLinks = [
-  { href: "/", label: "Anasayfa" },
-  { href: categoryHref("2. El Ürünler"), label: "2. El Ürünler" },
-  { href: "/sayfa/sss", label: "Müşteri Hizmetleri" },
-  { href: "/sayfa/iletisim", label: "İletişim" },
-];
-
-const navItems = STORE_CATEGORIES;
-
-const searchHints = ["Notebook", "Kulaklık", "Mouse", "Klavye", "Asus monitör"];
+const HINT_KEYS = ["0", "1", "2", "3", "4"] as const;
 
 function HeaderSearch({ id }: { id: string }) {
+  const t = useTranslations("Header");
+  const tCommon = useTranslations("Common");
   const [value, setValue] = React.useState("");
   const [hintIndex, setHintIndex] = React.useState(0);
   const [hintOn, setHintOn] = React.useState(true);
+
+  const searchHints = React.useMemo(
+    () => HINT_KEYS.map((key) => t(`searchHints.${key}`)),
+    [t],
+  );
 
   React.useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -55,12 +57,12 @@ function HeaderSearch({ id }: { id: string }) {
       window.clearInterval(timer);
       window.clearTimeout(fadeTimer);
     };
-  }, []);
+  }, [searchHints.length]);
 
   return (
     <form action="/urunler" className="min-w-0">
       <label className="sr-only" htmlFor={id}>
-        Ürün ara
+        {t("searchLabel")}
       </label>
       <div className="group relative flex h-10 items-center rounded-full border border-[#e3e8ec] bg-[#f4f6f8] pr-1 pl-3.5 transition-[background,border-color,box-shadow] duration-200 focus-within:border-[var(--bv-teal)] focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(227,0,15,0.12)] lg:h-11 lg:pl-4">
         <Search
@@ -84,16 +86,16 @@ function HeaderSearch({ id }: { id: string }) {
               hintOn ? "-translate-y-1/2 opacity-100" : "-translate-y-[80%] opacity-0",
             )}
           >
-            {searchHints[hintIndex]} ara
+            {t("searchHintSuffix", { hint: searchHints[hintIndex] })}
           </span>
         ) : null}
         <button
           type="submit"
           className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-[var(--bv-teal)] px-3 text-[13px] font-semibold text-white transition-[background,transform] duration-200 hover:bg-[var(--bv-teal-hover)] active:scale-[0.97] lg:h-9 lg:px-4"
-          aria-label="Ara"
+          aria-label={tCommon("search")}
         >
           <Search className="h-3.5 w-3.5 lg:hidden" strokeWidth={2.25} />
-          <span className="hidden lg:inline">Ara</span>
+          <span className="hidden lg:inline">{tCommon("search")}</span>
         </button>
       </div>
     </form>
@@ -141,6 +143,7 @@ function BranchBlock({
   onNavigate: () => void;
   framed?: boolean;
 }) {
+  const categoryLabel = useCategoryLabel();
   return (
     <div className={cn("min-w-0", framed && "rounded-xl bg-[#f4f7f8] p-2 sm:p-3")}>
       <Link
@@ -148,13 +151,13 @@ function BranchBlock({
         onClick={onNavigate}
         className="inline-flex min-h-11 items-center border-b-2 border-[var(--bv-teal)] px-2.5 text-[13px] font-semibold text-[#121417] hover:text-[var(--bv-teal)] lg:min-h-9"
       >
-        {branch.name}
+        {categoryLabel(branch)}
       </Link>
       <ul className="mt-1">
         {branch.children.map((grand) => (
           <li key={grand.href}>
             <MenuLink href={grand.href} onClick={onNavigate}>
-              {grand.name}
+              {categoryLabel(grand)}
             </MenuLink>
           </li>
         ))}
@@ -170,6 +173,8 @@ function CategoryPanel({
   item: CatalogNode;
   onNavigate: () => void;
 }) {
+  const t = useTranslations("Header");
+  const categoryLabel = useCategoryLabel();
   const branches = item.children.filter((child) => child.children.length > 0);
   const leaves = item.children.filter((child) => child.children.length === 0);
   const branchCols = "sm:grid-cols-[repeat(auto-fill,minmax(11.5rem,14.5rem))]";
@@ -180,14 +185,14 @@ function CategoryPanel({
       <div className="container-bv max-h-[min(70vh,26rem)] overflow-y-auto px-4 py-3 sm:px-0 sm:py-4">
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className="text-[11px] font-semibold tracking-[0.16em] text-[#8b939b] uppercase">
-            {item.name}
+            {categoryLabel(item)}
           </p>
           <Link
             href={item.href}
             onClick={onNavigate}
             className="inline-flex min-h-11 items-center gap-0.5 text-[13px] font-semibold text-[var(--bv-teal)] lg:min-h-9"
           >
-            Tümünü gör
+            {t("seeAll")}
             <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.25} />
           </Link>
         </div>
@@ -200,7 +205,7 @@ function CategoryPanel({
                 {leaves.map((leaf) => (
                   <li key={leaf.href}>
                     <MenuLink href={leaf.href} onClick={onNavigate} className="font-medium text-[#1c2128]">
-                      {leaf.name}
+                      {categoryLabel(leaf)}
                     </MenuLink>
                   </li>
                 ))}
@@ -227,7 +232,7 @@ function CategoryPanel({
                 {leaves.map((leaf) => (
                   <li key={leaf.href}>
                     <MenuLink href={leaf.href} onClick={onNavigate} className="font-medium text-[#1c2128]">
-                      {leaf.name}
+                      {categoryLabel(leaf)}
                     </MenuLink>
                   </li>
                 ))}
@@ -241,6 +246,10 @@ function CategoryPanel({
 }
 
 export function SiteHeader() {
+  const t = useTranslations("Header");
+  const tCommon = useTranslations("Common");
+  const formatMoney = useFormatMoney();
+  const categoryLabel = useCategoryLabel();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [drawerSection, setDrawerSection] = React.useState<string | null>(null);
@@ -250,6 +259,18 @@ export function SiteHeader() {
   const [cartOpen, setCartOpen] = React.useState(false);
   const [summary, setSummary] = React.useState({ count: 0, total: 0 });
   const [cartItems, setCartItems] = React.useState<CartDrawerItem[]>([]);
+
+  const utilityLinks = React.useMemo(
+    () => [
+      { href: "/", label: t("utilityHome") },
+      { href: categoryHref("2. El Ürünler"), label: t("utilityUsed") },
+      { href: "/sayfa/sss", label: t("utilityCustomerService") },
+      { href: "/sayfa/iletisim", label: t("utilityContact") },
+    ],
+    [t],
+  );
+
+  const navItems = STORE_CATEGORIES;
 
   const refreshCart = React.useCallback(() => {
     getCart()
@@ -264,7 +285,7 @@ export function SiteHeader() {
         setCartItems(
           items.map((item) => ({
             id: item.id,
-            name: item.product?.name ?? "Ürün",
+            name: item.product?.name ?? tCommon("productFallback"),
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             imageUrl: item.product?.images?.[0]?.url ?? null,
@@ -273,7 +294,7 @@ export function SiteHeader() {
         );
       })
       .catch(() => {});
-  }, []);
+  }, [tCommon]);
 
   React.useEffect(() => {
     refreshCart();
@@ -340,8 +361,11 @@ export function SiteHeader() {
           <div className="container-bv flex h-9 items-center justify-between gap-4">
             <p className="inline-flex min-w-0 items-center gap-2 font-medium">
               <Package className="h-3.5 w-3.5 shrink-0 text-white" strokeWidth={2} />
-              <span className="truncate">5.000 TL ve üzeri alışverişlerde kargo ücretsiz</span>
+              <span className="truncate">{t("promoBar")}</span>
             </p>
+            <div className="flex shrink-0 items-center gap-2 lg:hidden">
+              <LanguageSwitcher />
+            </div>
             <nav className="hidden items-center gap-4 lg:flex">
               {utilityLinks.map((link) => (
                 <Link key={link.href} href={link.href} className="hover:text-white/80">
@@ -349,8 +373,8 @@ export function SiteHeader() {
                 </Link>
               ))}
               <span className="text-white/50">|</span>
-              <span>Türkçe</span>
-              <span>TRY</span>
+              <LanguageSwitcher />
+              <span>{tCommon("currencyCode")}</span>
             </nav>
           </div>
         </div>
@@ -359,7 +383,7 @@ export function SiteHeader() {
           <button
             type="button"
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center lg:hidden"
-            aria-label={menuOpen ? "Menüyü kapat" : "Menüyü aç"}
+            aria-label={menuOpen ? t("closeMenu") : t("openMenu")}
             aria-expanded={menuOpen}
             onClick={() => {
               setMenuOpen((open) => !open);
@@ -379,33 +403,33 @@ export function SiteHeader() {
             <Link
               href="/hesabim"
               className="hidden h-10 items-center gap-2 px-2 text-[12px] leading-tight lg:inline-flex"
-              aria-label="Sipariş takip"
+              aria-label={t("orderTracking")}
             >
               <Package className="h-5 w-5" strokeWidth={1.75} />
               <span>
-                Sipariş
+                {t("orderTrackingLine1")}
                 <br />
-                takip
+                {t("orderTrackingLine2")}
               </span>
             </Link>
             <Link
               href="/favoriler"
               className="inline-flex h-10 w-10 items-center justify-center"
-              aria-label="Favoriler"
+              aria-label={t("favoritesAria")}
             >
               <Heart className="h-5 w-5" strokeWidth={1.75} />
             </Link>
             <Link
               href="/hesabim"
               className="inline-flex h-10 w-10 items-center justify-center"
-              aria-label="Hesabım"
+              aria-label={t("accountAria")}
             >
               <User className="h-5 w-5" strokeWidth={1.75} />
             </Link>
             <button
               type="button"
               className="inline-flex h-10 items-center gap-2 px-1.5"
-              aria-label="Sepet"
+              aria-label={t("cartAria")}
               onClick={() => setCartOpen(true)}
             >
               <span className="relative">
@@ -415,8 +439,8 @@ export function SiteHeader() {
                 </span>
               </span>
               <span className="hidden text-left text-[12px] leading-tight lg:block">
-                <span className="block">{summary.count} adet</span>
-                <span className="block font-semibold">{formatCurrency(summary.total)}</span>
+                <span className="block">{t("cartCount", { count: summary.count })}</span>
+                <span className="block font-semibold">{formatMoney(summary.total)}</span>
               </span>
             </button>
           </div>
@@ -459,7 +483,7 @@ export function SiteHeader() {
                   }}
                   onFocus={() => setOpenNav(item.slug)}
                 >
-                  {item.name}
+                  {categoryLabel(item)}
                   <ChevronDown
                     className={cn(
                       "h-3.5 w-3.5 text-[#8b939b] transition-transform",
@@ -478,7 +502,7 @@ export function SiteHeader() {
                     if (canHover()) setOpenNav(null);
                   }}
                 >
-                  {item.name}
+                  {categoryLabel(item)}
                 </Link>
               );
             })}
@@ -503,7 +527,7 @@ export function SiteHeader() {
                     setOpenNav((current) => (current === item.slug ? null : item.slug))
                   }
                 >
-                  {item.name}
+                  {categoryLabel(item)}
                   <ChevronDown
                     className={cn("h-3.5 w-3.5", open && "rotate-180")}
                     strokeWidth={2.25}
@@ -511,7 +535,7 @@ export function SiteHeader() {
                 </button>
               ) : (
                 <Link key={item.href} href={item.href} className={chipClass}>
-                  {item.name}
+                  {categoryLabel(item)}
                 </Link>
               );
             })}
@@ -534,16 +558,16 @@ export function SiteHeader() {
           <button
             type="button"
             className="absolute inset-0 bg-black/40"
-            aria-label="Menüyü kapat"
+            aria-label={t("closeMenu")}
             onClick={() => setMenuOpen(false)}
           />
           <div className="absolute inset-y-0 left-0 flex w-[min(100%,20rem)] flex-col bg-white shadow-xl">
             <div className="flex h-14 items-center justify-between border-b border-[#eee] px-4">
-              <p className="text-lg font-bold tracking-tight">Menü</p>
+              <p className="text-lg font-bold tracking-tight">{t("menuTitle")}</p>
               <button
                 type="button"
                 className="inline-flex h-11 w-11 items-center justify-center"
-                aria-label="Kapat"
+                aria-label={tCommon("close")}
                 onClick={() => setMenuOpen(false)}
               >
                 <X className="h-5 w-5" />
@@ -563,7 +587,7 @@ export function SiteHeader() {
                           setDrawerSection((current) => (current === item.slug ? null : item.slug))
                         }
                       >
-                        {item.name}
+                        {categoryLabel(item)}
                         <ChevronDown
                           className={cn("h-4 w-4 text-[#667] transition-transform", expanded && "rotate-180")}
                           strokeWidth={2}
@@ -575,7 +599,7 @@ export function SiteHeader() {
                         onClick={() => setMenuOpen(false)}
                         className="flex min-h-12 items-center px-3 text-[15px] font-semibold"
                       >
-                        {item.name}
+                        {categoryLabel(item)}
                       </Link>
                     )}
                     {expanded ? (
@@ -585,7 +609,7 @@ export function SiteHeader() {
                           onClick={() => setMenuOpen(false)}
                           className="flex min-h-11 items-center px-3 text-[13px] font-semibold text-[var(--bv-teal)]"
                         >
-                          Tümünü gör
+                          {t("seeAll")}
                         </Link>
                         {item.children.map((child) => (
                           <div key={child.href}>
@@ -594,7 +618,7 @@ export function SiteHeader() {
                               onClick={() => setMenuOpen(false)}
                               className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-[#222] hover:bg-[#f4f7f8]"
                             >
-                              {child.name}
+                              {categoryLabel(child)}
                             </Link>
                             {child.children.map((grand) => (
                               <Link
@@ -603,7 +627,7 @@ export function SiteHeader() {
                                 onClick={() => setMenuOpen(false)}
                                 className="flex min-h-10 items-center rounded-lg pr-3 pl-6 text-[13px] text-[#4a5560] hover:bg-[#f4f7f8] hover:text-[var(--bv-teal)]"
                               >
-                                {grand.name}
+                                {categoryLabel(grand)}
                               </Link>
                             ))}
                           </div>
@@ -618,7 +642,7 @@ export function SiteHeader() {
                 onClick={() => setMenuOpen(false)}
                 className="flex min-h-12 items-center px-3 text-[15px] font-semibold"
               >
-                Giriş / Üye ol
+                {t("loginRegister")}
               </Link>
               {utilityLinks.map((link) => (
                 <Link
@@ -631,9 +655,10 @@ export function SiteHeader() {
                 </Link>
               ))}
             </nav>
-            <p className="border-t border-[#eee] px-4 py-3 text-xs text-[#666]">
-              5.000 TL ve üzeri kargo ücretsiz
-            </p>
+            <div className="space-y-2 border-t border-[#eee] px-4 py-3">
+              <LanguageSwitcher compact tone="onSurface" />
+              <p className="text-xs text-[#666]">{t("mobilePromo")}</p>
+            </div>
           </div>
         </div>
       ) : null}

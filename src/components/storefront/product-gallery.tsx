@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import { SafeImage } from "@/components/ui/safe-image";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,8 @@ export type GalleryImage = {
 };
 
 export function ProductGallery({ images }: { images: GalleryImage[] }) {
+  const t = useTranslations("Product");
+  const tCommon = useTranslations("Common");
   const usable = React.useMemo(
     () => images.filter((image) => Boolean(image.url?.trim())),
     [images],
@@ -21,7 +24,7 @@ export function ProductGallery({ images }: { images: GalleryImage[] }) {
   if (!current) {
     return (
       <div className="flex aspect-square items-center justify-center rounded-[1.35rem] bg-[var(--bv-fog)] text-sm text-[var(--bv-muted)]">
-        Görsel yok
+        {tCommon("noImage")}
       </div>
     );
   }
@@ -36,7 +39,7 @@ export function ProductGallery({ images }: { images: GalleryImage[] }) {
               <button
                 key={image.id}
                 type="button"
-                aria-label={`${index + 1}. görsel`}
+                aria-label={t("galleryImageAria", { index: index + 1 })}
                 aria-current={selected ? "true" : undefined}
                 onClick={() => setActive(index)}
                 className={cn(

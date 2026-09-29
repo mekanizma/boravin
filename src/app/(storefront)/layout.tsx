@@ -3,7 +3,7 @@ import { SiteFooter } from "@/components/storefront/site-footer";
 
 export const dynamic = "force-dynamic";
 
-export default function StorefrontLayout({
+export default async function StorefrontLayout({
   children,
 }: {
   children: React.ReactNode;

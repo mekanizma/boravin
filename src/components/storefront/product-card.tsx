@@ -2,13 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Heart, Truck } from "lucide-react";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { addToCart } from "@/features/cart/actions";
 import { isMockProductId } from "@/lib/mock/storefront";
 import { useToast } from "@/components/ui/toast";
 import { CartAddButton } from "@/components/storefront/cart-add-button";
 import { SafeImage } from "@/components/ui/safe-image";
+import { useFormatMoney } from "@/lib/i18n/format";
 
 export type ProductCardData = {
   id: string;
@@ -36,6 +38,9 @@ export function ProductCard({
   favorited?: boolean;
 }) {
   const { toast } = useToast();
+  const t = useTranslations("Toasts");
+  const tCommon = useTranslations("Common");
+  const formatMoney = useFormatMoney();
   const [loading, setLoading] = React.useState(false);
   const [tilt, setTilt] = React.useState({ x: 0, y: 0 });
   const allowTilt = React.useRef(false);
@@ -68,8 +73,8 @@ export function ProductCard({
     if (isMockProductId(product.id)) {
       toast({
         tone: "info",
-        title: "Önizleme ürünü",
-        description: "Bu ürün vitrin örneği. Satıştaki ürünü ürün sayfasından sepete ekleyebilirsin.",
+        title: t("previewTitle"),
+        description: t("previewDesc"),
       });
       return;
     }
@@ -80,14 +85,14 @@ export function ProductCard({
       window.dispatchEvent(new Event("bv-cart-open"));
       toast({
         tone: "success",
-        title: "Sepete eklendi",
+        title: t("addedToCart"),
         description: product.name,
       });
     } catch {
       toast({
         tone: "error",
-        title: "Eklenemedi",
-        description: "Ürün sepete eklenemedi. Ürün sayfasından tekrar dene.",
+        title: t("addFailed"),
+        description: t("addFailedCardDesc"),
       });
     } finally {
       setLoading(false);
@@ -108,14 +113,14 @@ export function ProductCard({
           {freeCargo ? (
             <span className="bv-float absolute top-2 left-2 z-10 inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[9px] font-bold tracking-wide text-[#121417] shadow-[0_6px_12px_rgba(18,20,23,0.16)] sm:text-[10px]">
               <Truck className="h-3 w-3 text-[var(--bv-teal)]" strokeWidth={2.25} />
-              Kargo bedava
+              {tCommon("freeShipping")}
             </span>
           ) : null}
           {onFavorite ? (
             <button
               type="button"
               className="bv-float absolute top-2 right-2 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#333] shadow-[0_6px_12px_rgba(18,20,23,0.16)]"
-              aria-label="Favorilere ekle"
+              aria-label={t("addFavoriteAria")}
               onClick={() => onFavorite(product.id)}
             >
               <Heart
@@ -127,7 +132,7 @@ export function ProductCard({
             <Link
               href="/favoriler"
               className="bv-float absolute top-2 right-2 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#333] shadow-[0_6px_12px_rgba(18,20,23,0.16)]"
-              aria-label="Favoriler"
+              aria-label={tCommon("favorites")}
             >
               <Heart className="h-4 w-4" strokeWidth={1.75} />
             </Link>
@@ -143,13 +148,13 @@ export function ProductCard({
               />
             ) : (
               <span className="flex h-full items-center justify-center px-3 text-center text-xs text-[#999]">
-                Görsel yok
+                {tCommon("noImage")}
               </span>
             )}
           </Link>
           {discount ? (
             <span className="bv-float absolute bottom-2 left-2 rounded-full bg-[var(--bv-sale)] px-2 py-1 text-[11px] font-bold text-white shadow-[0_8px_14px_rgba(227,0,15,0.28)]">
-              %{discount}
+              {tCommon("discountPercent", { percent: discount })}
             </span>
           ) : null}
         </div>
@@ -172,10 +177,10 @@ export function ProductCard({
           </Link>
           <div className="mt-2 min-h-[2.6rem]">
             {compare && compare > price ? (
-              <p className="text-[12px] text-[#98a1aa] line-through">{formatCurrency(compare)}</p>
+              <p className="text-[12px] text-[#98a1aa] line-through">{formatMoney(compare)}</p>
             ) : null}
             <p className="text-base font-bold tracking-tight text-[var(--bv-sale)] sm:text-lg">
-              {formatCurrency(price)}
+              {formatMoney(price)}
             </p>
           </div>
           <CartAddButton

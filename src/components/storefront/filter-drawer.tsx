@@ -1,10 +1,12 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Drawer } from "@/components/ui/drawer";
 import {
   FilterSidebar,
   type FilterGroup,
 } from "@/components/storefront/filter-sidebar";
+import type { CatalogSort } from "@/lib/storefront/catalog-sort";
 
 export function FilterDrawer({
   open,
@@ -14,6 +16,8 @@ export function FilterDrawer({
   priceMin,
   priceMax,
   onPriceChange,
+  sort,
+  onSortChange,
   onNavigate,
 }: {
   open: boolean;
@@ -25,10 +29,13 @@ export function FilterDrawer({
   priceMin?: string;
   priceMax?: string;
   onPriceChange?: (min: string, max: string) => void;
+  sort?: CatalogSort;
+  onSortChange?: (sort: CatalogSort) => void;
   onNavigate?: () => void;
 }) {
+  const t = useTranslations("Filters");
   return (
-    <Drawer open={open} onClose={onClose} title="Kategoriler" side="left">
+    <Drawer open={open} onClose={onClose} title={t("drawerTitle")} side="left">
       <div className="flex h-[min(70dvh,32rem)] flex-col">
         <FilterSidebar
           className="h-full min-h-0"
@@ -37,6 +44,8 @@ export function FilterDrawer({
           priceMin={priceMin}
           priceMax={priceMax}
           onPriceChange={onPriceChange}
+          sort={sort}
+          onSortChange={onSortChange}
           showHeading={false}
           onNavigate={onNavigate ?? onClose}
         />

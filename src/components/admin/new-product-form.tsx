@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, ScanBarcode, X } from "lucide-react";
+import { Camera, ScanBarcode, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
@@ -26,6 +26,73 @@ type BarcodeDetectorCtor = {
 
 const fieldClass =
   "h-12 w-full rounded-[var(--radius-md)] border border-[var(--bv-border-strong)] bg-white px-3 text-base text-[var(--bv-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]";
+
+const LOOKUP_STEPS = [
+  "Kataloglar taranıyor",
+  "Web kaynakları kontrol ediliyor",
+  "Gemini ürün bilgisi hazırlıyor",
+  "Sonuçlar düzenleniyor",
+] as const;
+
+function BarcodeLookupLoading({ barcode }: { barcode: string }) {
+  const [step, setStep] = React.useState(0);
+
+  React.useEffect(() => {
+    setStep(0);
+    const timers = [
+      window.setTimeout(() => setStep(1), 900),
+      window.setTimeout(() => setStep(2), 2200),
+      window.setTimeout(() => setStep(3), 4500),
+    ];
+    return () => timers.forEach((id) => window.clearTimeout(id));
+  }, [barcode]);
+
+  return (
+    <div
+      className="bv-barcode-loading-backdrop"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="bv-barcode-loading-card">
+        <div className="bv-barcode-loading-orb" aria-hidden>
+          <Sparkles className="h-6 w-6" strokeWidth={1.75} />
+        </div>
+        <p className="mt-4 text-center text-[11px] font-semibold tracking-[0.16em] text-[var(--bv-muted)] uppercase">
+          Ürün bilgisi
+        </p>
+        <h2 className="mt-1 text-center font-display text-xl font-semibold tracking-tight text-[var(--bv-ink)]">
+          Barkod aranıyor
+        </h2>
+        <p className="mt-1.5 text-center font-mono text-sm tabular-nums text-[var(--bv-slate)]">
+          {barcode}
+        </p>
+        <div className="bv-barcode-loading-progress" aria-hidden>
+          <span />
+        </div>
+        <ul className="bv-barcode-loading-steps">
+          {LOOKUP_STEPS.map((label, index) => {
+            const state =
+              index < step ? "done" : index === step ? "active" : "pending";
+            return (
+              <li
+                key={label}
+                className="bv-barcode-loading-step"
+                data-state={state}
+              >
+                <span className="bv-barcode-loading-dot" aria-hidden />
+                <span>{label}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-4 text-center text-[12px] text-[var(--bv-muted)]">
+          Icecat, açık kataloglar ve Gemini paralel sorgulanıyor…
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export function NewProductForm({
   categories,
@@ -97,7 +164,7 @@ export function NewProductForm({
     try {
       const result = await Promise.race([
         lookupBarcodeAction(digits),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 28000)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 16000)),
       ]);
       if (requestId !== requestRef.current) return;
       if (!result) {
@@ -167,7 +234,7 @@ export function NewProductForm({
     if (lastLookup.current === digits) return;
     const timer = window.setTimeout(() => {
       void applyLookup(digits);
-    }, 450);
+    }, 280);
     return () => window.clearTimeout(timer);
   }, [applyLookup, barcode]);
 
@@ -328,10 +395,12 @@ export function NewProductForm({
       <div>
         <h1 className="font-display text-2xl font-semibold">Yeni ürün</h1>
         <p className="mt-1 text-sm text-[var(--bv-muted)]">
-          Barkodu okutun. Ad, marka, açıklama ve görseller Open Icecat ve açık ürün
-          kataloglarından gelir. Siz fiyat, stok ve eksik alanları onaylarsınız.
+          Barkodu okutun. Ad, marka ve açıklama Icecat, açık kataloglar ve Gemini
+          ile paralel çekilir. Siz fiyat, stok ve eksik alanları onaylarsınız.
         </p>
       </div>
+
+      {looking ? <BarcodeLookupLoading barcode={barcode.replace(/\D/g, "") || barcode} /> : null}
 
       <section className="space-y-3 border border-[var(--bv-border)] bg-white p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">

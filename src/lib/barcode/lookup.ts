@@ -16,7 +16,7 @@ export type ExternalLookup = {
   offline: boolean;
 };
 
-async function fetchJson(url: string, timeoutMs = 4500): Promise<unknown | null> {
+async function fetchJson(url: string, timeoutMs = 3500): Promise<unknown | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -78,7 +78,7 @@ function upcitemdbUrl(code: string) {
 async function fetchUpcitemdb(code: string): Promise<unknown | null> {
   const key = process.env.UPCITEMDB_USER_KEY?.trim();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4500);
+  const timer = setTimeout(() => controller.abort(), 3500);
   try {
     const response = await fetch(upcitemdbUrl(code), {
       signal: controller.signal,
@@ -164,71 +164,74 @@ async function lookupOpenFacts(
 }
 
 /**
- * Live lookup against free public catalogs, then web search fallbacks.
- * Catalogs run in parallel with a short budget so the admin UI does not hang.
+ * Live lookup against free public catalogs, then web/Gemini fallbacks.
+ * Catalogs + web start together; first solid hit wins under a tight budget.
  */
 export async function lookupBarcodeExternal(barcode: string): Promise<ExternalLookup> {
   const codes = barcodeCandidates(barcode);
-  let sawResponse = false;
-  let sawNetworkError = false;
 
   const catalogPromise = (async (): Promise<ExternalLookup | null> => {
-    const icecat = await firstDraft(codes, async (code) => {
-      let networkError = true;
-      for (const url of icecatUrls(code)) {
-        const payload = await fetchJson(url, 5000);
-        if (payload == null) continue;
-        networkError = false;
-        const draft = mapIcecatProduct(payload, barcode);
-        if (draft) return { draft, networkError: false };
-        if (isIcecatMiss(payload)) break;
-      }
-      return { draft: null, networkError };
-    });
-    if (icecat.draft) return { draft: icecat.draft, offline: false };
+    // Icecat + UPC + OpenFacts in parallel — first draft wins.
+    const [icecat, upc, productsFacts, foodFacts, beautyFacts] = await Promise.all([
+      firstDraft(codes, async (code) => {
+        let networkError = true;
+        for (const url of icecatUrls(code)) {
+          const payload = await fetchJson(url, 3500);
+          if (payload == null) continue;
+          networkError = false;
+          const draft = mapIcecatProduct(payload, barcode);
+          if (draft) return { draft, networkError: false };
+          if (isIcecatMiss(payload)) break;
+        }
+        return { draft: null, networkError };
+      }),
+      firstDraft(codes, async (code) => {
+        const payload = await fetchUpcitemdb(code);
+        if (payload == null) return { draft: null, networkError: true };
+        return {
+          draft: mapUpcitemdbProduct(payload, barcode),
+          networkError: false,
+        };
+      }),
+      lookupOpenFacts("world.openproductsfacts.org", "openproductsfacts", codes, barcode),
+      lookupOpenFacts("world.openfoodfacts.org", "openfoodfacts", codes, barcode),
+      lookupOpenFacts("world.openbeautyfacts.org", "openbeautyfacts", codes, barcode),
+    ]);
 
-    const upc = await firstDraft(codes, async (code) => {
-      const payload = await fetchUpcitemdb(code);
-      if (payload == null) return { draft: null, networkError: true };
-      const draft = mapUpcitemdbProduct(payload, barcode);
-      return { draft, networkError: false };
-    });
-    if (upc.draft) return { draft: upc.draft, offline: false };
-
-    for (const [host, source] of [
-      ["world.openproductsfacts.org", "openproductsfacts"],
-      ["world.openfoodfacts.org", "openfoodfacts"],
-      ["world.openbeautyfacts.org", "openbeautyfacts"],
-    ] as const) {
-      const facts = await lookupOpenFacts(host, source, codes, barcode);
-      if (facts.draft) return { draft: facts.draft, offline: false };
-    }
+    const hit =
+      icecat.draft ??
+      upc.draft ??
+      productsFacts.draft ??
+      foodFacts.draft ??
+      beautyFacts.draft;
+    if (hit) return { draft: hit, offline: false };
     return null;
   })();
 
   const webPromise = lookupWebFallbacks(barcode);
 
-  // Prefer a catalog hit, but don't wait forever before starting to care about web.
-  const catalog = await Promise.race([
+  // Prefer a fast catalog hit; don't block web/Gemini while waiting.
+  const earlyCatalog = await Promise.race([
     catalogPromise,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 4200)),
   ]);
-  if (catalog?.draft) return catalog;
+  if (earlyCatalog?.draft) return earlyCatalog;
 
-  const catalogFinal = await catalogPromise;
+  const [catalogFinal, web] = await Promise.all([
+    catalogPromise,
+    Promise.race([
+      webPromise,
+      new Promise<{ draft: null; networkError: boolean }>((resolve) =>
+        setTimeout(() => resolve({ draft: null, networkError: true }), 12_000),
+      ),
+    ]),
+  ]);
+
   if (catalogFinal?.draft) return catalogFinal;
-
-  const web = await Promise.race([
-    webPromise,
-    new Promise<{ draft: null; networkError: boolean }>((resolve) =>
-      setTimeout(() => resolve({ draft: null, networkError: true }), 24000),
-    ),
-  ]);
   if (web.draft) return { draft: web.draft, offline: false };
-  sawNetworkError ||= web.networkError;
 
   return {
     draft: null,
-    offline: sawNetworkError && !sawResponse,
+    offline: web.networkError,
   };
 }

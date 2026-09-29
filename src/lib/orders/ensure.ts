@@ -1,11 +1,15 @@
 import { sql } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { db, isPglite } from "@/lib/db";
 
 let ensured = false;
 
-/** Ensures `accepted` exists on order_status enum (local / older DBs). */
+/** Ensures `accepted` exists on order_status enum (PGlite / local bootstrap). */
 export async function ensureOrderStatusEnum() {
   if (ensured) return;
+  if (!isPglite()) {
+    ensured = true;
+    return;
+  }
   try {
     await db.execute(sql`
       DO $$ BEGIN

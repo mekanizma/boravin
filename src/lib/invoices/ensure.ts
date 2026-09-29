@@ -1,11 +1,15 @@
 import { sql } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { db, isPglite } from "@/lib/db";
 
 let ensured = false;
 
 /** Creates invoice tables/enums if missing (PGlite / local bootstrap). */
 export async function ensureInvoiceTables() {
   if (ensured) return;
+  if (!isPglite()) {
+    ensured = true;
+    return;
+  }
   await db.execute(sql`
     DO $$ BEGIN
       CREATE TYPE invoice_type AS ENUM('invoice', 'receipt', 'proforma');

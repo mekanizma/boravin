@@ -1,8 +1,11 @@
+import { getLocale, getTranslations } from "next-intl/server";
 import { Star } from "lucide-react";
 import { DetailCard } from "@/components/storefront/detail-card";
 import { ProductReviewForm } from "@/components/storefront/product-review-form";
 import { listApprovedProductReviews } from "@/features/reviews/actions";
 import { cn } from "@/lib/utils";
+import { formatDateLocale } from "@/lib/i18n/format";
+import type { AppLocale } from "@/i18n/config";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -29,6 +32,8 @@ export async function ProductReviewsSection({
   productId: string;
   defaultName?: string;
 }) {
+  const t = await getTranslations("Reviews");
+  const locale = (await getLocale()) as AppLocale;
   let items: Awaited<ReturnType<typeof listApprovedProductReviews>> = [];
   try {
     items = await listApprovedProductReviews(productId);
@@ -45,11 +50,11 @@ export async function ProductReviewsSection({
     <section className="mt-12 sm:mt-16">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-[var(--bv-border)] pb-3">
         <div>
-          <h2 className="font-display text-2xl font-semibold">Yorumlar</h2>
+          <h2 className="font-display text-2xl font-semibold">{t("title")}</h2>
           <p className="mt-1 text-sm text-[var(--bv-muted)]">
             {items.length
-              ? `${items.length} onaylı yorum · Ort. ${avg.toFixed(1)}/5`
-              : "Henüz onaylanmış yorum yok"}
+              ? t("summary", { count: items.length, avg: avg.toFixed(1) })
+              : t("noneApproved")}
           </p>
         </div>
       </div>
@@ -58,17 +63,14 @@ export async function ProductReviewsSection({
         <div className="space-y-3">
           {items.length === 0 ? (
             <DetailCard className="p-5 sm:p-6">
-              <p className="text-sm text-[var(--bv-muted)]">
-                Bu ürün için henüz yayınlanmış yorum bulunmuyor. İlk yorumu siz
-                yazabilirsiniz; admin onayından sonra görünür.
-              </p>
+              <p className="text-sm text-[var(--bv-muted)]">{t("emptyList")}</p>
             </DetailCard>
           ) : (
             items.map((item) => (
               <DetailCard key={item.id} className="p-4 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-semibold">
-                    {item.authorName ?? "Müşteri"}
+                    {item.authorName ?? t("customerFallback")}
                   </p>
                   <Stars rating={item.rating} />
                 </div>
@@ -82,7 +84,7 @@ export async function ProductReviewsSection({
                 ) : null}
                 <p className="mt-3 text-xs text-[var(--bv-muted)]">
                   {item.createdAt
-                    ? new Date(item.createdAt).toLocaleDateString("tr-TR")
+                    ? formatDateLocale(item.createdAt, locale)
                     : null}
                 </p>
               </DetailCard>
@@ -91,7 +93,7 @@ export async function ProductReviewsSection({
         </div>
 
         <DetailCard className="h-fit p-4 sm:p-5">
-          <h3 className="font-display text-lg font-semibold">Yorum yaz</h3>
+          <h3 className="font-display text-lg font-semibold">{t("writeTitle")}</h3>
           <div className="mt-3">
             <ProductReviewForm
               productId={productId}

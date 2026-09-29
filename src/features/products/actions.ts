@@ -49,7 +49,7 @@ export type ProductSearchParams = {
   status?: string;
   page?: number;
   pageSize?: number;
-  sort?: "newest" | "price_asc" | "price_desc" | "popular";
+  sort?: "recommended" | "newest" | "price_asc" | "price_desc" | "popular";
   attrs?: Record<string, string>;
 };
 
@@ -98,15 +98,21 @@ export async function searchProducts(params: ProductSearchParams) {
 
   const where = conditions.length ? and(...conditions) : undefined;
 
-  let orderBy = desc(products.createdAt);
-  if (params.sort === "price_asc") orderBy = asc(products.price);
-  if (params.sort === "price_desc") orderBy = desc(products.price);
-  if (params.sort === "popular") orderBy = desc(products.soldCount);
+  let orderBy = [
+    desc(products.isFeatured),
+    desc(products.isCampaign),
+    desc(products.soldCount),
+    desc(products.createdAt),
+  ];
+  if (params.sort === "price_asc") orderBy = [asc(products.price), desc(products.createdAt)];
+  if (params.sort === "price_desc") orderBy = [desc(products.price), desc(products.createdAt)];
+  if (params.sort === "newest") orderBy = [desc(products.createdAt)];
+  if (params.sort === "popular") orderBy = [desc(products.soldCount), desc(products.createdAt)];
 
   const [rows, countRow] = await Promise.all([
     db.query.products.findMany({
       where,
-      orderBy: [orderBy],
+      orderBy,
       limit: pageSize,
       offset,
       with: {

@@ -6,7 +6,8 @@ export default function AdminProductOutboundPage() {
       <div>
         <h1 className="font-display text-2xl font-semibold">Ürün Çıkışı</h1>
         <p className="text-sm text-[var(--bv-muted)]">
-          Firma veya kişiye ürün satışı — stok düşer, fatura/makbuz oluşur
+          Firma veya kişiye ürün satışı — stok düşer, fatura/makbuz oluşur.
+          Ödeme alındıysa çıkışta doğrudan &quot;Ödendi&quot; işaretleyebilirsiniz.
         </p>
       </div>
       <ProductOutboundForm />

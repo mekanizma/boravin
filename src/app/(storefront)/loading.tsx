@@ -1,6 +1,9 @@
-export default function StorefrontLoading() {
+import { getTranslations } from "next-intl/server";
+
+export default async function StorefrontLoading() {
+  const t = await getTranslations("Common");
   return (
-    <div className="container-bv py-8 sm:py-10" aria-busy="true" aria-label="Yükleniyor">
+    <div className="container-bv py-8 sm:py-10" aria-busy="true" aria-label={t("loadingAria")}>
       <div className="h-8 w-48 animate-pulse rounded-md bg-[#d8dee4]" />
       <div className="mt-3 h-4 w-72 max-w-full animate-pulse rounded-md bg-[#e2e7ec]" />
       <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">

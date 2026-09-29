@@ -410,7 +410,7 @@ export async function lookupGoogleHeadless(barcode: string): Promise<ProductDraf
           ),
           title,
         ),
-        new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 12000)),
+        new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 5000)),
       ])) ?? [];
 
     return hitToDraft(
@@ -440,8 +440,7 @@ export async function lookupGoogleHeadless(barcode: string): Promise<ProductDraf
 }
 
 /**
- * Gemini free-tier lookup. Google Search grounding is not included on the free
- * tier, so this uses the model only and leaves unknown barcodes empty.
+ * Gemini free-tier lookup. Fast timeout — runs in parallel with other fallbacks.
  */
 export async function lookupGeminiGoogle(barcode: string): Promise<ProductDraft | null> {
   const apiKey = geminiApiKey();
@@ -454,11 +453,11 @@ export async function lookupGeminiGoogle(barcode: string): Promise<ProductDraft 
       model: modelName,
       generationConfig: {
         temperature: 0,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 768,
         responseMimeType: "application/json",
       },
     },
-    geminiRequestOptions(20000),
+    geminiRequestOptions(9000),
   );
 
   const prompt = `Barkod/GTIN ${barcode} için bildiğin perakende ürününü yaz.
@@ -492,41 +491,68 @@ Emin değilsen bütün alanları boş string ve imageUrls boş dizi yap. Barkodd
   }
 }
 
-/** Ordered web fallbacks after public barcode catalogs miss. */
+async function firstSettledDraft(
+  tasks: Array<() => Promise<ProductDraft | null>>,
+): Promise<ProductDraft | null> {
+  if (!tasks.length) return null;
+  return await new Promise<ProductDraft | null>((resolve) => {
+    let pending = tasks.length;
+    let settled = false;
+    for (const task of tasks) {
+      void task()
+        .then((draft) => {
+          if (settled) return;
+          if (draft) {
+            settled = true;
+            resolve(draft);
+            return;
+          }
+          pending -= 1;
+          if (pending <= 0) resolve(null);
+        })
+        .catch(() => {
+          if (settled) return;
+          pending -= 1;
+          if (pending <= 0) resolve(null);
+        });
+    }
+  });
+}
+
+/** Parallel web + Gemini fallbacks after public barcode catalogs miss. */
 export async function lookupWebFallbacks(barcode: string): Promise<{
   draft: ProductDraft | null;
   networkError: boolean;
 }> {
   let networkError = false;
 
-  // Brave/web search first — finds retail GTINs that catalogs miss.
-  try {
-    const google = await lookupGoogleHeadless(barcode);
-    if (google) return { draft: google, networkError: false };
-  } catch {
-    networkError = true;
-  }
+  const draft = await Promise.race([
+    firstSettledDraft([
+      () => lookupGeminiGoogle(barcode),
+      () =>
+        lookupSerperGoogle(barcode).catch(() => {
+          networkError = true;
+          return null;
+        }),
+      () =>
+        lookupWikidata(barcode).catch(() => {
+          networkError = true;
+          return null;
+        }),
+      () =>
+        lookupGoogleHeadless(barcode).catch(() => {
+          networkError = true;
+          return null;
+        }),
+      () =>
+        lookupDuckDuckGo(barcode).catch(() => {
+          networkError = true;
+          return null;
+        }),
+    ]),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 11_000)),
+  ]);
 
-  try {
-    const wiki = await lookupWikidata(barcode);
-    if (wiki) return { draft: wiki, networkError: false };
-  } catch {
-    networkError = true;
-  }
-
-  try {
-    const serper = await lookupSerperGoogle(barcode);
-    if (serper) return { draft: serper, networkError: false };
-  } catch {
-    networkError = true;
-  }
-
-  try {
-    const ddg = await lookupDuckDuckGo(barcode);
-    if (ddg) return { draft: ddg, networkError: false };
-  } catch {
-    networkError = true;
-  }
-
+  if (draft) return { draft, networkError: false };
   return { draft: null, networkError };
 }

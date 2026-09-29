@@ -125,6 +125,31 @@ Ayrıca: `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SECRET_KEY`, `GEMINI_*`.
 
 Değişiklikten sonra **Manual Deploy**.
 
+### Üye profil / teslimat adresi (Supabase)
+
+Storefront hesap ve adres özelliği **Auth kullanıcı id’si = `customers.id`** ile çalışır. Veritabanı tarafında:
+
+- `addresses` için `customer_id` indeksi ve müşteri başına tek varsayılan adres kuralı
+- `customers` ve `addresses` tablolarında **RLS**: `authenticated` rolü yalnızca `auth.uid()` ile eşleşen satırlara erişir
+
+Uygulama sunucusu `DATABASE_URL` (pooler) ile yazdığı için mevcut server action’lar aynı kalır; RLS, ileride Supabase client ile doğrudan tablo erişiminde koruma sağlar.
+
+**Migration (önerilen):**
+
+```bash
+npm run db:migrate:deploy
+```
+
+Supabase’de şema zaten varken (ilk kez drizzle journal yoksa) bir kez:
+
+```bash
+npm run db:supabase:customer-addresses   # RLS + adres indeksleri
+npm run db:stamp-migrations              # drizzle.__drizzle_migrations kaydı
+npm run db:sync-customers                # Auth → public.customers
+```
+
+Alternatif: Supabase Dashboard → SQL Editor → `supabase/migrations/20260229194500_customer_addresses_rls.sql` içeriğini çalıştırın.
+
 ## Notlar
 
 - Docker kapalıysa uygulama UI render eder; DB bağımlı listeler empty state gösterir.

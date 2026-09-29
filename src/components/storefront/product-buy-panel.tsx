@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { formatCurrency } from "@/lib/utils";
+import { useLocale, useTranslations } from "next-intl";
+import { useFormatMoney } from "@/lib/i18n/format";
+import { translateVariantLabel } from "@/lib/i18n/variant-label";
 import { ProductPurchaseActions } from "@/components/storefront/product-purchase-actions";
 import { DetailCard } from "@/components/storefront/detail-card";
 import type { FavoriteItem } from "@/lib/favorites";
@@ -26,6 +28,10 @@ export function ProductBuyPanel({
   stock: number;
   variants: BuyVariant[];
 }) {
+  const t = useTranslations("Product");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
+  const formatMoney = useFormatMoney();
   const activeVariants = variants.filter((variant) => variant.stock >= 0);
   const [variantId, setVariantId] = React.useState<string | undefined>(
     activeVariants[0]?.id,
@@ -45,16 +51,16 @@ export function ProductBuyPanel({
         <div className="bv-float">
           {compare ? (
             <p className="text-sm text-[var(--bv-muted)] line-through">
-              {formatCurrency(compare)}
+              {formatMoney(compare)}
             </p>
           ) : null}
           <p className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-            {formatCurrency(price)}
+            {formatMoney(price)}
           </p>
         </div>
         {discount ? (
           <p className="bv-float rounded-full bg-[var(--bv-sale)] px-3 py-1 text-xs font-bold text-white shadow-[0_8px_14px_rgba(227,0,15,0.28)]">
-            %{discount} indirim
+            {tCommon("discountPercentLabel", { percent: discount })}
           </p>
         ) : null}
       </div>
@@ -62,16 +68,18 @@ export function ProductBuyPanel({
       <p className="mt-2.5 text-sm text-[var(--bv-slate)]">
         {available > 0
           ? available <= 8
-            ? `Stokta · son ${available} ürün`
-            : "Stokta"
-          : "Tükendi"}
-        {price >= 5000 ? " · Kargo bedava" : " · 5.000 TL üzeri kargo bedava"}
+            ? tCommon("inStockLast", { count: available })
+            : tCommon("inStock")
+          : tCommon("outOfStock")}
+        {price >= 5000
+          ? ` · ${tCommon("freeShipping")}`
+          : ` · ${tCommon("freeShippingThresholdShort")}`}
       </p>
 
       {activeVariants.length > 0 ? (
         <div className="mt-4">
           <p className="text-xs font-semibold tracking-[0.14em] text-[var(--bv-muted)] uppercase">
-            Seçenek
+            {t("option")}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {activeVariants.map((variant) => {
@@ -89,7 +97,7 @@ export function ProductBuyPanel({
                       : "bv-key-line h-10 rounded-xl border border-[var(--bv-border-strong)] bg-white px-3.5 text-sm font-medium text-[var(--bv-ink)] disabled:opacity-40"
                   }
                 >
-                  {variant.name}
+                  {translateVariantLabel(variant.name, locale)}
                 </button>
               );
             })}

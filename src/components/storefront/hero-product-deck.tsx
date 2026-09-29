@@ -3,9 +3,11 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ProductCardData } from "@/components/storefront/product-card";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useFormatMoney } from "@/lib/i18n/format";
 
 const AUTO_MS = 4500;
 
@@ -14,6 +16,8 @@ export function HeroProductDeck({
 }: {
   products: ProductCardData[];
 }) {
+  const t = useTranslations("Home");
+  const formatMoney = useFormatMoney();
   const list = products.filter((p) => p.imageUrl).slice(0, 6);
   const [active, setActive] = React.useState(0);
   const [paused, setPaused] = React.useState(false);
@@ -66,11 +70,11 @@ export function HeroProductDeck({
           />
           {product.isNew ? (
             <span className="absolute top-0 left-0 bg-[var(--bv-ink)] px-2.5 py-1 text-[10px] font-semibold tracking-[0.14em] text-white uppercase">
-              Yeni
+              {t("heroDeckNew")}
             </span>
           ) : product.isCampaign ? (
             <span className="absolute top-0 left-0 bg-[var(--bv-teal)] px-2.5 py-1 text-[10px] font-semibold tracking-[0.14em] text-white uppercase">
-              Kampanya
+              {t("heroDeckCampaign")}
             </span>
           ) : null}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#121417]/90 via-[#121417]/45 to-transparent p-4 text-white sm:p-5">
@@ -84,7 +88,7 @@ export function HeroProductDeck({
                 {product.name}
               </p>
               <p className="shrink-0 font-display text-lg font-semibold tracking-tight sm:text-xl">
-                {formatCurrency(Number(product.price))}
+                {formatMoney(Number(product.price))}
               </p>
             </div>
           </div>
@@ -94,7 +98,7 @@ export function HeroProductDeck({
           <>
             <button
               type="button"
-              aria-label="Önceki ürün"
+              aria-label={t("prevProduct")}
               onClick={() => go(-1)}
               className="absolute top-1/2 left-0 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center border border-white/20 bg-[var(--bv-ink)]/70 text-white backdrop-blur-sm transition-colors hover:bg-[var(--bv-ink)] active:scale-[0.97] sm:left-2"
             >
@@ -102,7 +106,7 @@ export function HeroProductDeck({
             </button>
             <button
               type="button"
-              aria-label="Sonraki ürün"
+              aria-label={t("nextProduct")}
               onClick={() => go(1)}
               className="absolute top-1/2 right-0 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center border border-white/20 bg-[var(--bv-ink)]/70 text-white backdrop-blur-sm transition-colors hover:bg-[var(--bv-ink)] active:scale-[0.97] sm:right-2"
             >
@@ -120,7 +124,7 @@ export function HeroProductDeck({
               <button
                 key={item.id}
                 type="button"
-                aria-label={`${item.name} göster`}
+                aria-label={t("showProduct", { name: item.name })}
                 aria-current={selected ? "true" : undefined}
                 onClick={() => setActive(i)}
                 className={cn(

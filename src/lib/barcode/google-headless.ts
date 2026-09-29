@@ -14,7 +14,7 @@ export type GoogleOrganicHit = {
 const JUNK_HOST =
   /(google\.|bing\.|duckduckgo\.|brave\.com|swisscows\.|ecosia\.|youtube\.|facebook\.|instagram\.|twitter\.|x\.com|tiktok\.|barcodelookup\.|go-upc\.|upcitemdb\.|ean-search\.|scanbot\.|scandit\.|17track\.|barcode.?lookup|hackerone\.|allergeninside\.|jonesfarmsupply\.|nutritionvalue\.|nahdionline\.)/i;
 
-const SEARCH_BUDGET_MS = 18_000;
+const SEARCH_BUDGET_MS = 9_000;
 
 function chromeCandidates(): string[] {
   const envPath = process.env.CHROME_PATH?.trim() || process.env.GOOGLE_CHROME_PATH?.trim();
