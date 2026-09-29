@@ -194,10 +194,27 @@ describe("mapWebSearchProduct", () => {
       "8806094972252",
       "google",
     );
-    expect(draft?.sourceLabel).toBe("Google (AI arama)");
+    expect(draft?.sourceLabel).toBe("Web arama");
     expect(draft?.imageUrls).toEqual(["https://lh3.googleusercontent.com/product.jpg"]);
     expect(isSafePublicImageUrl("https://cdn.shopify.com/s/files/1/x.jpg")).toBe(true);
     expect(isAllowedProductImageUrl("https://cdn.shopify.com/s/files/1/x.jpg")).toBe(true);
     expect(isSafePublicImageUrl("https://192.168.1.1/a.jpg")).toBe(false);
+  });
+
+  it("upgrades thumbnail URLs to full size", () => {
+    const draft = mapWebSearchProduct(
+      {
+        name: "Test",
+        brand: "Brand",
+        imageUrls: [
+          "https://lh3.googleusercontent.com/photo=s220",
+          "https://cdn.shopify.com/s/files/1/prod_200x200.jpg",
+        ],
+      },
+      "8690000000000",
+      "google",
+    );
+    expect(draft?.imageUrls[0]).toBe("https://lh3.googleusercontent.com/photo=s0");
+    expect(draft?.imageUrls[1]).toBe("https://cdn.shopify.com/s/files/1/prod.jpg");
   });
 });

@@ -11,6 +11,7 @@ import {
   isSafePublicImageUrl,
   mapWebSearchProduct,
 } from "@/lib/barcode/parse";
+import { ensureMinProductImages } from "@/lib/barcode/product-images";
 import type { ProductDraft } from "@/lib/barcode/types";
 
 const USER_AGENT = "Boravin/1.0 (admin barcode import; +https://www.boravin.com)";
@@ -304,10 +305,10 @@ export async function lookupSerperGoogle(barcode: string): Promise<ProductDraft 
           "X-API-KEY": key,
         },
         body: JSON.stringify({
-          q: `${barcode} product`,
+          q: `${barcode} ürün`,
           gl: "tr",
           hl: "tr",
-          num: 5,
+          num: 10,
         }),
       }),
     ]);
@@ -322,7 +323,13 @@ export async function lookupSerperGoogle(barcode: string): Promise<ProductDraft 
       };
     } | null;
     const images = (await imageRes.json().catch(() => null)) as {
-      images?: Array<{ imageUrl?: string; link?: string; title?: string }>;
+      images?: Array<{
+        imageUrl?: string;
+        thumbnailUrl?: string;
+        title?: string;
+        imageWidth?: number;
+        imageHeight?: number;
+      }>;
     } | null;
 
     if (!organicRes.ok && !imageRes.ok) return null;
@@ -339,9 +346,21 @@ export async function lookupSerperGoogle(barcode: string): Promise<ProductDraft 
         .join("\n\n") ||
       "";
     const brand = kg?.attributes?.Brand || kg?.attributes?.Marka || "";
+    const rankedImages = [...(images?.images ?? [])].sort((a, b) => {
+      const areaA = (a.imageWidth ?? 0) * (a.imageHeight ?? 0);
+      const areaB = (b.imageWidth ?? 0) * (b.imageHeight ?? 0);
+      return areaB - areaA;
+    });
     const imageUrls = [
       kg?.imageUrl,
-      ...(images?.images ?? []).map((row) => row.imageUrl),
+      ...rankedImages
+        .filter((row) => {
+          const w = row.imageWidth ?? 0;
+          const h = row.imageHeight ?? 0;
+          if (w > 0 && h > 0 && (w < 400 || h < 400)) return false;
+          return Boolean(row.imageUrl || row.thumbnailUrl);
+        })
+        .map((row) => row.imageUrl || row.thumbnailUrl),
     ].filter((u): u is string => Boolean(u));
 
     const pageImages = await enrichImagesFromPages(
@@ -463,7 +482,7 @@ export async function lookupGeminiGoogle(barcode: string): Promise<ProductDraft 
   const prompt = `Barkod/GTIN ${barcode} için bildiğin perakende ürününü yaz.
 Türkçe tercih et. Sadece geçerli JSON döndür:
 {"name":"ürün adı","brand":"marka","category":"kategori","shortDescription":"kısa özet","description":"ürün açıklaması","model":"model kodu","imageUrls":[]}
-Emin değilsen bütün alanları boş string ve imageUrls boş dizi yap. Barkoddan ürün uydurma. imageUrls her zaman boş dizi olsun.`;
+Emin değilsen bütün alanları boş string ve imageUrls boş dizi yap. Barkoddan ürün uydurma. imageUrls boş bırak; görseller ayrıca aranır.`;
 
   try {
     const result = await model.generateContent(prompt);
@@ -471,7 +490,7 @@ Emin değilsen bütün alanları boş string ve imageUrls boş dizi yap. Barkodd
     if (!parsed) return null;
     const name = asString(parsed.name);
     if (!name || name.replace(/\D/g, "") === barcode) return null;
-    return hitToDraft(
+    const draft = hitToDraft(
       {
         title: name,
         brand: asString(parsed.brand),
@@ -484,6 +503,8 @@ Emin değilsen bütün alanları boş string ve imageUrls boş dizi yap. Barkodd
       barcode,
       "google",
     );
+    if (!draft) return null;
+    return draft;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gemini barkod sorgusu başarısız";
     console.error("[barcode-gemini]", message);
@@ -553,6 +574,9 @@ export async function lookupWebFallbacks(barcode: string): Promise<{
     new Promise<null>((resolve) => setTimeout(() => resolve(null), 11_000)),
   ]);
 
-  if (draft) return { draft, networkError: false };
+  if (draft) {
+    const enriched = await ensureMinProductImages(draft, barcode, 3);
+    return { draft: enriched, networkError: false };
+  }
   return { draft: null, networkError };
 }

@@ -143,6 +143,37 @@ export function isAllowedProductImageUrl(raw: string): boolean {
   }
 }
 
+/** Promote common CDN/thumbnail URLs to the largest available asset. */
+export function upgradeToFullSizeImageUrl(raw: string): string {
+  let url = raw.trim();
+  if (!url) return url;
+
+  try {
+    const parsed = new URL(url);
+    const nested =
+      parsed.searchParams.get("u") ||
+      parsed.searchParams.get("url") ||
+      parsed.searchParams.get("imgurl") ||
+      parsed.searchParams.get("imgrefurl") ||
+      "";
+    if (/^https?:\/\//i.test(nested)) url = nested;
+  } catch {
+    // keep original
+  }
+
+  url = url.replace(/\._[A-Z]{1,3}\d{2,4}_[^.]*\./gi, ".");
+  url = url.replace(/\._AC_[^./]+_\./gi, ".");
+  url = url.replace(/\._SL\d+_\./gi, ".");
+  url = url.replace(/=s\d+(-[a-z]+)?$/i, "=s0");
+  url = url.replace(/=w\d+-h\d+[^&]*/i, "=s0");
+  url = url.replace(/_\d{2,4}x\d{2,4}(?=\.[a-z]{3,4}(?:\?|$))/i, "");
+  url = url.replace(/\/cache\/\d+\//i, "/");
+  url = url.replace(/\.(100|200|400)\.(jpe?g|png|webp)(\?|$)/i, ".$2$3");
+  url = url.replace(/\/thumbs?\//i, "/");
+  url = url.replace(/\/thumbnail\//i, "/");
+  return url;
+}
+
 export function stripHtml(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, "\n")
@@ -201,11 +232,12 @@ function uniqueUrls(urls: string[], source: BarcodeSource): string[] {
     LOOSE_IMAGE_SOURCES.has(source) ? isSafePublicImageUrl : isAllowedProductImageUrl;
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const url of urls) {
+  for (const raw of urls) {
+    const url = upgradeToFullSizeImageUrl(raw);
     if (!allow(url) || seen.has(url)) continue;
     seen.add(url);
     out.push(url);
-    if (out.length >= 6) break;
+    if (out.length >= 8) break;
   }
   return out;
 }
@@ -295,8 +327,9 @@ export function mapIcecatProduct(payload: unknown, barcode: string): ProductDraf
   }
   const images = [
     data.data.Image?.HighPic,
+    ...(data.data.Gallery ?? []).map((item) => item.Pic),
     data.data.Image?.Pic500x500,
-    ...(data.data.Gallery ?? []).flatMap((item) => [item.Pic, item.Pic500x500]),
+    ...(data.data.Gallery ?? []).map((item) => item.Pic500x500),
   ].filter((url): url is string => Boolean(url));
 
   return finalize("icecat", barcode, {
@@ -384,12 +417,22 @@ export function mapOpenFactsProduct(
     product.generic_name_tr ||
     product.generic_name ||
     "";
+  const displayImages = Object.values(product.selected_images ?? {}).flatMap(
+    (slot) => {
+      const display = slot.display ?? {};
+      // Prefer full / largest keys when present.
+      const preferredKeys = ["full", "display", "400", "200", "100"];
+      const ordered = [
+        ...preferredKeys.map((key) => display[key]).filter(Boolean),
+        ...Object.values(display),
+      ];
+      return ordered.filter((url): url is string => Boolean(url));
+    },
+  );
   const images = [
     product.image_front_url,
     product.image_url,
-    ...Object.values(product.selected_images ?? {}).flatMap((slot) =>
-      Object.values(slot.display ?? {}),
-    ),
+    ...displayImages,
   ].filter((url): url is string => Boolean(url));
   const details = [
     product.generic_name_tr || product.generic_name,

@@ -345,19 +345,12 @@ async function searchDuckDuckGoImages(query: string): Promise<string[]> {
 
     const out: string[] = [];
     for (const row of raw) {
-      const blob = `${row.alt} ${query}`;
-      if (!/xenon|camera|kamera|security|güvenlik|ptz|wifi|wi-fi|smart/i.test(blob)) {
-        continue;
-      }
-      // Prefer alts that look like the actual product listing.
-      if (row.alt && !/xenon|camera|kamera|security|güvenlik|ptz/i.test(row.alt)) {
-        continue;
-      }
       const url = unwrapImageProxy(row.src);
       if (!isUsefulProductImage(url, query)) continue;
-      // Prefer unwrapped CDN/original URLs over search thumbnails when possible.
+      // Prefer larger decoded images when available.
+      if (row.w > 0 && row.w < 180) continue;
       out.push(url);
-      if (out.length >= 4) break;
+      if (out.length >= 6) break;
     }
     return [...new Set(out)];
   } finally {
@@ -505,16 +498,16 @@ export async function enrichImagesFromGoogleHits(
     if (images.length >= 4) break;
   }
 
-  if (images.length === 0 && titleHint) {
+  if (images.length < 3 && titleHint) {
     const model = titleHint.match(/\bX\d{3,5}\b/i)?.[0] ?? "";
     const ddgQuery = [titleHint.slice(0, 80), model].filter(Boolean).join(" ");
     const ddg =
       (await withTimeout(searchDuckDuckGoImages(ddgQuery), 10000, "ddg-images")) ?? [];
     for (const url of ddg) {
       if (!images.includes(url)) images.push(url);
-      if (images.length >= 4) break;
+      if (images.length >= 6) break;
     }
   }
 
-  return [...new Set(images)].slice(0, 4);
+  return [...new Set(images)].slice(0, 6);
 }

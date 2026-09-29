@@ -8,6 +8,7 @@ import {
 } from "@/lib/barcode/parse";
 import type { ProductDraft } from "@/lib/barcode/types";
 import { lookupWebFallbacks } from "@/lib/barcode/web-lookup";
+import { ensureMinProductImages } from "@/lib/barcode/product-images";
 
 const USER_AGENT = "Boravin/1.0 (admin barcode import; +https://www.boravin.com)";
 
@@ -204,7 +205,10 @@ export async function lookupBarcodeExternal(barcode: string): Promise<ExternalLo
       productsFacts.draft ??
       foodFacts.draft ??
       beautyFacts.draft;
-    if (hit) return { draft: hit, offline: false };
+    if (hit) {
+      const enriched = await ensureMinProductImages(hit, barcode, 3);
+      return { draft: enriched, offline: false };
+    }
     return null;
   })();
 
