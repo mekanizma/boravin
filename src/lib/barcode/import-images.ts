@@ -4,9 +4,34 @@ import { getStorageProvider } from "@/lib/storage";
 import {
   isAllowedProductImageUrl,
   isSafePublicImageUrl,
+  upgradeToFullSizeImageUrl,
 } from "@/lib/barcode/parse";
 
 const MAX_BYTES = 6 * 1024 * 1024;
+
+/** Stable catalog CDNs — keep hotlink; survives ephemeral local disks on deploy. */
+const STABLE_CATALOG_HOSTS = [
+  "images.icecat.biz",
+  "images.openproductsfacts.org",
+  "images.openfoodfacts.org",
+  "images.openbeautyfacts.org",
+  "static.openfoodfacts.org",
+  "static.openfoodfacts.net",
+  "static.openbeautyfacts.org",
+  "commons.wikimedia.org",
+  "upload.wikimedia.org",
+];
+
+function isStableCatalogUrl(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return STABLE_CATALOG_HOSTS.some(
+      (h) => host === h || host.endsWith(`.${h}`),
+    );
+  } catch {
+    return false;
+  }
+}
 
 function sniffImage(bytes: Uint8Array): { ext: string; contentType: string } | null {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
@@ -43,10 +68,15 @@ function sniffImage(bytes: Uint8Array): { ext: string; contentType: string } | n
 export async function storeRemoteProductImage(rawUrl: string): Promise<string | null> {
   // Catalog hosts or any SSRF-safe https (web search). Content is sniffed as a real image.
   if (!isAllowedProductImageUrl(rawUrl) && !isSafePublicImageUrl(rawUrl)) return null;
+  const upgraded = upgradeToFullSizeImageUrl(rawUrl);
+  // Icecat / Open*Facts / Wikimedia: keep CDN URL (full-size, durable across deploys).
+  if (isAllowedProductImageUrl(upgraded) && isStableCatalogUrl(upgraded)) {
+    return upgraded;
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12000);
   try {
-    const response = await fetch(rawUrl, {
+    const response = await fetch(upgraded, {
       signal: controller.signal,
       redirect: "follow",
       headers: { Accept: "image/avif,image/webp,image/*,*/*" },

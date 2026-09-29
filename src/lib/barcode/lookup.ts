@@ -164,6 +164,12 @@ async function lookupOpenFacts(
   return { draft: null, sawResponse, sawNetworkError };
 }
 
+function isSolidCatalogHit(draft: ProductDraft | null | undefined): draft is ProductDraft {
+  if (!draft) return false;
+  // Brand-only / empty OFF stubs must not block web/Gemini fallbacks.
+  return Boolean(draft.name.trim());
+}
+
 /**
  * Live lookup against free public catalogs, then web/Gemini fallbacks.
  * Catalogs + web start together; first solid hit wins under a tight budget.
@@ -200,11 +206,9 @@ export async function lookupBarcodeExternal(barcode: string): Promise<ExternalLo
     ]);
 
     const hit =
-      icecat.draft ??
-      upc.draft ??
-      productsFacts.draft ??
-      foodFacts.draft ??
-      beautyFacts.draft;
+      [icecat.draft, upc.draft, productsFacts.draft, foodFacts.draft, beautyFacts.draft].find(
+        isSolidCatalogHit,
+      ) ?? null;
     if (hit) {
       const enriched = await ensureMinProductImages(hit, barcode, 3);
       return { draft: enriched, offline: false };
@@ -219,7 +223,9 @@ export async function lookupBarcodeExternal(barcode: string): Promise<ExternalLo
     catalogPromise,
     new Promise<null>((resolve) => setTimeout(() => resolve(null), 4200)),
   ]);
-  if (earlyCatalog?.draft) return earlyCatalog;
+  if (earlyCatalog?.draft && isSolidCatalogHit(earlyCatalog.draft)) {
+    return earlyCatalog;
+  }
 
   const [catalogFinal, web] = await Promise.all([
     catalogPromise,
@@ -231,8 +237,13 @@ export async function lookupBarcodeExternal(barcode: string): Promise<ExternalLo
     ]),
   ]);
 
-  if (catalogFinal?.draft) return catalogFinal;
+  if (catalogFinal?.draft && isSolidCatalogHit(catalogFinal.draft)) {
+    return catalogFinal;
+  }
   if (web.draft) return { draft: web.draft, offline: false };
+
+  // Weak catalog stub (e.g. brand-only) is better than nothing.
+  if (catalogFinal?.draft) return catalogFinal;
 
   return {
     draft: null,

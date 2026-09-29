@@ -11,7 +11,7 @@ function resolveSrc(src: ImageProps["src"] | null | undefined) {
   if (!src || typeof src !== "string") return FALLBACK;
   const trimmed = src.trim();
   if (!trimmed) return FALLBACK;
-  if (trimmed.startsWith("/uploads/")) return FALLBACK;
+  if (trimmed.startsWith("uploads/")) return `/${trimmed}`;
   return trimmed;
 }
 
