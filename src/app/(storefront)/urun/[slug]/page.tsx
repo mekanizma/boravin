@@ -12,6 +12,7 @@ import { loadProductCards } from "@/lib/storefront/products";
 import { ProductGrid } from "@/components/storefront/product-grid";
 import { findMockProduct } from "@/lib/mock/storefront";
 import type { Metadata } from "next";
+import { publicImageUrl } from "@/lib/media/url";
 
 export async function generateMetadata({
   params,
@@ -236,11 +237,13 @@ export default async function ProductDetailPage({
 
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] lg:gap-20">
         <ProductGallery
-          images={images.map((image) => ({
-            id: image.id,
-            url: image.url,
-            alt: image.alt ?? product.name,
-          }))}
+          images={images
+            .map((image) => ({
+              id: image.id,
+              url: publicImageUrl(image.url) ?? "",
+              alt: image.alt ?? product.name,
+            }))
+            .filter((image) => Boolean(image.url))}
         />
 
         <div className="lg:sticky lg:top-36">
@@ -273,7 +276,7 @@ export default async function ProductDetailPage({
               name: product.name,
               slug: product.slug,
               price: Number(product.price),
-              imageUrl: primary?.url ?? null,
+              imageUrl: publicImageUrl(primary?.url ?? null),
             }}
             basePrice={Number(product.price)}
             compareAtPrice={compare}

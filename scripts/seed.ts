@@ -362,63 +362,28 @@ async function seed() {
   const allProducts = [...productTemplates, ...extra];
   const productIdList: string[] = [];
 
-  /** Distinct Unsplash photos — one primary per product index (sig= alone does not change the image). */
+  /** Distinct Unsplash photos — curated working set for seed + Render. */
   const PRODUCT_PHOTOS = [
-    "1511707171634-5f897ff02aa9", // phone
-    "1592899677977-9c10ca588bbd", // iphone
-    "1610945415295-d9bbf067e59c", // samsung
-    "1510557882401-a2ad210afa42", // phone desk
     "1517336714731-489689fd1ca8", // macbook
-    "1496181133206-80ce9b88a853", // laptop
-    "1593640408182-31c70c8268f5", // gaming desk
+    "1511707171634-5f897ff02aa9", // phone
+    "1496181133206-80ce9b88a853", // laptop desk
+    "1505740420928-5e560c06d30e", // headphones
+    "1542751371-adc38448a05e", // gaming rgb
+    "1606144042614-b2417e99c4e3", // playstation
+    "1593640408182-31c70c8268f5", // desk setup
+    "1610945415295-d9bbf067e59c", // samsung phone
+    "1468495244123-6c6c332eeece", // gadgets flatlay
+    "1518770660439-4636190af475", // circuits
+    "1591799264318-7e6ef8ddb7ea", // motherboard
     "1603302576837-37561b2e2302", // gaming laptop
     "1611186871348-b1ce696e52c9", // macbook open
-    "1525547719571-a2d4ac8828bb", // macbook side
-    "1498050108023-c5249f4df085", // laptop workspace
-    "1517694712202-14dd9538aa97", // coding laptop
-    "1541807084-5c53f6a1afeb", // laptop flatlay
-    "1531297481264-d3c98541d1ef", // laptop silver
-    "1606813907291-d86efa9b94db", // console/controller
-    "1493711662062-fa541adb3fc8", // gaming
-    "1600294037681-c80b4cb5b434", // airpods
-    "1505740420928-5e560c06d30e", // headphones
-    "1484704849709-1afec988cab0", // headphones black
-    "1546435770-a3e426bf472b", // headphones studio
-    "1618366712010-f4ae9c647dcb", // headset
     "1606220588913-b3aacb4d2f46", // earbuds
-    "1583394838336-acd977736f90", // headphones
     "1527814050087-3793815479db", // mouse
-    "1558317374-067fb5f30001", // vacuum/home
-    "1581578731548-c64695cc6952", // cleaning
-    "1556911220-bff31c812dba", // kitchen/home
-    "1584622650111-993a426fbf0a", // bathroom/home
-    "1612815154858-60aa4f6f74e0", // printer/office
-    "1454165804606-c3d57bc86b40", // office desk
-    "1593359676535-895205650edc", // tv
-    "1461156753357-655484dba035", // television
-    "1550745165-9bc0b252726f", // retro tech
-    "1511512578047-dfb9829680b0", // gaming setup
-    "1591799264318-7e6ef8ddb7ea", // motherboard
-    "1555617981-dac3880eac6c", // pc build
-    "1518770660439-4636190af475", // circuits
-    "1468495244123-6c6c332eeece", // gadgets flatlay
-    "1542751371-adc38448a05e", // gaming rgb
-    "1622297845775-5ff3fef71da6", // controller
-    "1588872657578-7bffe1c7a14f", // laptop dark
-    "1484781837692-c1f4bfc6e5f0", // laptop bed
-    "1601784551446-20c9e07cdbdb", // phone
-    "1580910051074-3eb694886605", // phone
-    "1605236453806-6ff36851218e", // phone hand
-    "1574944985070-8b9eb58b3c89", // smartphone
-    "1563986768609-322da13575f3", // tech workspace
-    "1586953208448-b95a79798f07", // printer paper
-    "1558618666-fcd25c85cd64", // laundry/home
-    "1563453392212-326f5e854473", // cleaning supplies
-    "1626804475297-41608ea36aef", // laundry
-    "1625948515291-69613efd103f", // keyboard
-    "1695048133142-1a20484d2569", // phone close
-    "1606144042614-b2417e99c4e3", // playstation
-    "1574375929452-d0d077649290", // tv living
+    "1493711662062-fa541adb3fc8", // console
+    "1546435770-a3e426bf472b", // headphones
+    "1618366712010-f4ae9c647dcb", // headphones desk
+    "1584622650111-993a426fbf0a", // vacuum/home
+    "1606813907291-d86efa9b94db", // console/controller
   ] as const;
 
   function productImageUrl(photoId: string, w = 800, h = 1000) {

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import Image from "next/image";
+import { SafeImage } from "@/components/ui/safe-image";
 import { useRouter } from "next/navigation";
 import { Minus, Plus, ShoppingBag, Trash2, Truck } from "lucide-react";
 import { Drawer } from "@/components/ui/drawer";
@@ -208,7 +208,7 @@ export function CartDrawer({
                     className="relative h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden bg-[var(--bv-concrete)]"
                   >
                     {item.imageUrl ? (
-                      <Image
+                      <SafeImage
                         src={item.imageUrl}
                         alt=""
                         fill

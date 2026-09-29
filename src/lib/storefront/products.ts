@@ -2,6 +2,7 @@ import { asc, desc, eq, ilike, and, sql, gte, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { brands, categories, productImages, products } from "@/lib/db/schema";
 import type { ProductCardData } from "@/components/storefront/product-card";
+import { publicImageUrl } from "@/lib/media/url";
 
 export async function loadProductCards(opts?: {
   limit?: number;
@@ -89,8 +90,8 @@ export async function loadProductCards(opts?: {
         isCampaign: p.isCampaign,
         isFeatured: p.isFeatured,
         brandName: p.brandName,
-        imageUrl: imgs[0]?.url ?? null,
-        hoverImageUrl: imgs[1]?.url ?? null,
+        imageUrl: publicImageUrl(imgs[0]?.url ?? null),
+        hoverImageUrl: publicImageUrl(imgs[1]?.url ?? null),
       };
     });
   } catch {

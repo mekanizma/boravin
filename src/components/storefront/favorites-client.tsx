@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { SafeImage } from "@/components/ui/safe-image";
 import { readFavorites, toggleFavorite, type FavoriteItem } from "@/lib/favorites";
 import { formatCurrency } from "@/lib/utils";
 
@@ -41,7 +41,7 @@ export function FavoritesClient() {
             >
               <Link href={`/urun/${item.slug}`} className="relative h-20 w-20 shrink-0 bg-[var(--bv-concrete)]">
                 {item.imageUrl ? (
-                  <Image
+                  <SafeImage
                     src={item.imageUrl}
                     alt=""
                     fill

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { Heart, Truck } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -9,6 +8,7 @@ import { addToCart } from "@/features/cart/actions";
 import { isMockProductId } from "@/lib/mock/storefront";
 import { useToast } from "@/components/ui/toast";
 import { CartAddButton } from "@/components/storefront/cart-add-button";
+import { SafeImage } from "@/components/ui/safe-image";
 
 export type ProductCardData = {
   id: string;
@@ -134,7 +134,7 @@ export function ProductCard({
           )}
           <Link href={`/urun/${product.slug}`} className="relative block aspect-square">
             {product.imageUrl ? (
-              <Image
+              <SafeImage
                 src={product.imageUrl}
                 alt={product.name}
                 fill

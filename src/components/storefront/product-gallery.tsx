@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
+import { SafeImage } from "@/components/ui/safe-image";
 import { cn } from "@/lib/utils";
 
 export type GalleryImage = {
@@ -11,8 +11,12 @@ export type GalleryImage = {
 };
 
 export function ProductGallery({ images }: { images: GalleryImage[] }) {
+  const usable = React.useMemo(
+    () => images.filter((image) => Boolean(image.url?.trim())),
+    [images],
+  );
   const [active, setActive] = React.useState(0);
-  const current = images[active] ?? images[0];
+  const current = usable[active] ?? usable[0];
 
   if (!current) {
     return (
@@ -24,9 +28,9 @@ export function ProductGallery({ images }: { images: GalleryImage[] }) {
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-[5.25rem_minmax(0,1fr)] sm:gap-5">
-      {images.length > 1 ? (
+      {usable.length > 1 ? (
         <div className="order-2 flex gap-3 overflow-x-auto px-1 py-2 sm:order-1 sm:flex-col sm:overflow-visible">
-          {images.map((image, index) => {
+          {usable.map((image, index) => {
             const selected = index === active;
             return (
               <button
@@ -42,7 +46,7 @@ export function ProductGallery({ images }: { images: GalleryImage[] }) {
                     : "border-transparent",
                 )}
               >
-                <Image
+                <SafeImage
                   src={image.url}
                   alt=""
                   fill
@@ -57,7 +61,7 @@ export function ProductGallery({ images }: { images: GalleryImage[] }) {
       <div className="order-1 px-2 pt-2 pr-6 pb-8 sm:order-2">
         <div className="bv-detail-slab p-3 sm:p-4">
           <div className="bv-plinth relative aspect-square overflow-hidden rounded-[1rem] sm:aspect-[4/5]">
-            <Image
+            <SafeImage
               src={current.url}
               alt={current.alt}
               fill

@@ -16,6 +16,9 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**.supabase.co" },
       { protocol: "https", hostname: "images.icecat.biz" },
     ],
+    // Avoid noisy deploy logs when a remote asset briefly times out.
+    minimumCacheTTL: 60 * 60 * 24,
+    formats: ["image/avif", "image/webp"],
   },
   experimental: {
     serverActions: {

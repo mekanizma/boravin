@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/start-render.mjs",
+    "start:next": "next start",
     "start:render": "node scripts/start-render.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -20,6 +21,7 @@
     "db:migrate:pglite": "tsx scripts/db-migrate-pglite.ts",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seed.ts",
+    "db:fix-images": "node scripts/fix-product-images.mjs",
     "db:sync-auth": "tsx scripts/sync-supabase-auth.ts",
     "db:sync-customers": "tsx scripts/sync-customers.ts",
     "db:clear-mock": "tsx scripts/clear-mock.ts",
