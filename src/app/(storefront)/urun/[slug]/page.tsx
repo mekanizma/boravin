@@ -72,9 +72,18 @@ async function loadProduct(slug: string) {
   try {
     return await run();
   } catch (error) {
-    if (!isTransientDbError(error)) throw error;
-    await recoverDb();
-    return await run();
+    // Connection/SSL/schema errors are not transient WASM aborts — still fall back to mock.
+    if (isTransientDbError(error)) {
+      try {
+        await recoverDb();
+        return await run();
+      } catch (retryError) {
+        console.error("[product] load retry failed", retryError);
+        return null;
+      }
+    }
+    console.error("[product] load failed", error);
+    return null;
   }
 }
 
@@ -157,9 +166,23 @@ export default async function ProductDetailPage({
   const primary = images[0];
   const compare = product.compareAtPrice ? Number(product.compareAtPrice) : null;
   const specEntries = Object.entries({
-    ...(product.specs ?? {}),
-    ...(product.technicalSpecs ?? {}),
-  }).filter(([, value]) => Boolean(value));
+    ...(product.specs && typeof product.specs === "object" ? product.specs : {}),
+    ...(product.technicalSpecs && typeof product.technicalSpecs === "object"
+      ? product.technicalSpecs
+      : {}),
+  })
+    .map(([label, value]) => {
+      if (value == null || value === "") return null;
+      if (typeof value === "string" || typeof value === "number") {
+        return [label, String(value)] as const;
+      }
+      try {
+        return [label, JSON.stringify(value)] as const;
+      } catch {
+        return null;
+      }
+    })
+    .filter((row): row is readonly [string, string] => Boolean(row));
 
   const jsonLd = {
     "@context": "https://schema.org",
