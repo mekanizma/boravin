@@ -9,9 +9,9 @@ function uploadsRoot() {
   if (fromEnv) {
     return path.isAbsolute(fromEnv)
       ? path.normalize(fromEnv)
-      : path.resolve(process.cwd(), fromEnv);
+      : path.resolve(/*turbopackIgnore: true*/ process.cwd(), fromEnv);
   }
-  return path.join(process.cwd(), "public", "uploads");
+  return path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
 }
 
 function publicUrlForKey(key: string) {
@@ -26,7 +26,7 @@ export const localStorageProvider: StorageProvider = {
     const folder = input.folder ?? "general";
     const ext = path.extname(input.filename) || "";
     const key = `${folder}/${nanoid(12)}${ext}`;
-    const fullPath = path.join(uploadsRoot(), key);
+    const fullPath = path.join(/*turbopackIgnore: true*/ uploadsRoot(), key);
     await mkdir(path.dirname(fullPath), { recursive: true });
     await writeFile(fullPath, input.body);
     return {
@@ -37,7 +37,7 @@ export const localStorageProvider: StorageProvider = {
     };
   },
   async delete(key: string) {
-    const fullPath = path.join(uploadsRoot(), key);
+    const fullPath = path.join(/*turbopackIgnore: true*/ uploadsRoot(), key);
     await unlink(fullPath).catch(() => undefined);
   },
 };

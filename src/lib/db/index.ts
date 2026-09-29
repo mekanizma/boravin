@@ -41,7 +41,7 @@ function resolveDataDir(raw: string) {
   const trimmed = raw.trim() || "./data/boravin";
   return path.isAbsolute(trimmed)
     ? path.normalize(trimmed)
-    : path.resolve(process.cwd(), trimmed);
+    : path.resolve(/*turbopackIgnore: true*/ process.cwd(), trimmed);
 }
 
 function pgliteDataDir() {

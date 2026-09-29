@@ -304,7 +304,7 @@ export default async function ProductDetailPage({
                   ["Stok", product.stock > 0 ? `${product.stock} adet` : "Tükendi"],
                 ] as const
               )
-                .filter((row): row is readonly [string, string] => Boolean(row[1]))
+                .filter((row) => Boolean(row[1]))
                 .map(([label, value]) => (
                   <div key={label} className="flex items-baseline justify-between gap-4 px-3 py-3">
                     <dt className="text-sm text-[var(--bv-muted)]">{label}</dt>

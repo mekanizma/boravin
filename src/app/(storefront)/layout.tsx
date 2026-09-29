@@ -1,6 +1,8 @@
 import { SiteHeader } from "@/components/storefront/site-header";
 import { SiteFooter } from "@/components/storefront/site-footer";
 
+export const dynamic = "force-dynamic";
+
 export default function StorefrontLayout({
   children,
 }: {
