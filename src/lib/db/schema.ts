@@ -40,6 +40,7 @@ export const stockMovementTypeEnum = pgEnum("stock_movement_type", [
 export const orderStatusEnum = pgEnum("order_status", [
   "new",
   "awaiting_payment",
+  "accepted",
   "preparing",
   "shipped",
   "delivered",
@@ -585,6 +586,9 @@ export const invoices = pgTable(
     notes: text("notes"),
     paymentMethod: varchar("payment_method", { length: 64 }),
     paymentStatus: varchar("payment_status", { length: 32 }).default("unpaid"),
+    paidAmount: numeric("paid_amount", { precision: 12, scale: 2 })
+      .default("0")
+      .notNull(),
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -598,6 +602,7 @@ export const invoices = pgTable(
     index("invoices_type_idx").on(t.type),
     index("invoices_order_idx").on(t.orderId),
     index("invoices_customer_idx").on(t.customerId),
+    index("invoices_payment_status_idx").on(t.paymentStatus),
   ],
 );
 
@@ -620,6 +625,30 @@ export const invoiceItems = pgTable("invoice_items", {
   lineTotal: numeric("line_total", { precision: 12, scale: 2 }).notNull(),
   sortOrder: integer("sort_order").default(0).notNull(),
 });
+
+export const invoicePayments = pgTable(
+  "invoice_payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    method: varchar("method", { length: 64 }),
+    paidAt: timestamp("paid_at", { withTimezone: true }).defaultNow().notNull(),
+    note: text("note"),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("invoice_payments_invoice_idx").on(t.invoiceId),
+    index("invoice_payments_paid_at_idx").on(t.paidAt),
+  ],
+);
 
 export const campaigns = pgTable(
   "campaigns",
@@ -1011,11 +1040,19 @@ export const invoicesRelations = relations(invoices, ({ one, many }) => ({
     references: [customers.id],
   }),
   items: many(invoiceItems),
+  payments: many(invoicePayments),
 }));
 
 export const invoiceItemsRelations = relations(invoiceItems, ({ one }) => ({
   invoice: one(invoices, {
     fields: [invoiceItems.invoiceId],
+    references: [invoices.id],
+  }),
+}));
+
+export const invoicePaymentsRelations = relations(invoicePayments, ({ one }) => ({
+  invoice: one(invoices, {
+    fields: [invoicePayments.invoiceId],
     references: [invoices.id],
   }),
 }));

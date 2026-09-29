@@ -4,11 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  BarChart3,
   Package,
   Warehouse,
   FolderTree,
   Award,
   ShoppingCart,
+  ArrowUpFromLine,
   Receipt,
   Users,
   Megaphone,
@@ -34,11 +36,13 @@ import { BrandLogo } from "@/components/brand-logo";
 
 const nav = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/reports", label: "Raporlar", icon: BarChart3 },
   { href: "/admin/products", label: "Ürünler", icon: Package },
   { href: "/admin/stock", label: "Stok", icon: Warehouse },
   { href: "/admin/categories", label: "Kategoriler", icon: FolderTree },
   { href: "/admin/brands", label: "Markalar", icon: Award },
   { href: "/admin/orders", label: "Siparişler", icon: ShoppingCart },
+  { href: "/admin/urun-cikisi", label: "Ürün Çıkışı", icon: ArrowUpFromLine },
   { href: "/admin/invoices", label: "Faturalar", icon: Receipt },
   { href: "/admin/customers", label: "Müşteriler", icon: Users },
   { href: "/admin/campaigns", label: "Kampanyalar", icon: Megaphone },

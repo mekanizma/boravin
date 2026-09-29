@@ -43,8 +43,40 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   cancelled: "İptal",
 };
 
+export type InvoicePaymentStatus = "unpaid" | "partial" | "paid";
+
+export const INVOICE_PAYMENT_LABELS: Record<InvoicePaymentStatus, string> = {
+  unpaid: "Ödenmedi",
+  partial: "Kısmi ödendi",
+  paid: "Ödendi",
+};
+
+export const INVOICE_PAYMENT_METHODS = [
+  "Nakit",
+  "Kredi Kartı",
+  "Havale",
+  "EFT",
+  "Çek",
+  "Diğer",
+] as const;
+
 export function money(n: number) {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
+}
+
+export function derivePaymentStatus(
+  grandTotal: number,
+  paidAmount: number,
+): InvoicePaymentStatus {
+  const total = money(grandTotal);
+  const paid = money(paidAmount);
+  if (paid <= 0) return "unpaid";
+  if (paid + 0.001 >= total) return "paid";
+  return "partial";
+}
+
+export function remainingBalance(grandTotal: number, paidAmount: number) {
+  return money(Math.max(0, money(grandTotal) - money(paidAmount)));
 }
 
 export function computeInvoiceTotals(items: InvoiceLineInput[]): InvoiceTotals {

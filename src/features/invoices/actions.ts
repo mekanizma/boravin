@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import {
   customers,
   invoiceItems,
+  invoicePayments,
   invoices,
   orderItems,
   orders,
@@ -15,8 +16,11 @@ import { requirePermission, writeAuditLog } from "@/lib/auth/rbac";
 import { ensureInvoiceTables } from "@/lib/invoices/ensure";
 import {
   computeInvoiceTotals,
+  derivePaymentStatus,
   invoiceNumberPrefix,
+  money,
   sellerDefaults,
+  type InvoicePaymentStatus,
   type InvoiceType,
 } from "@/lib/invoices/helpers";
 
@@ -88,6 +92,9 @@ export async function createInvoice(raw: z.input<typeof createSchema>) {
   const status = data.status;
   const buyerEmail = data.buyerEmail?.trim() || null;
 
+  const paymentStatus = data.paymentStatus ?? "unpaid";
+  const paidAmount = paymentStatus === "paid" ? totals.grandTotal : 0;
+
   const [invoice] = await db
     .insert(invoices)
     .values({
@@ -112,7 +119,8 @@ export async function createInvoice(raw: z.input<typeof createSchema>) {
       grandTotal: totals.grandTotal.toFixed(2),
       notes: data.notes?.trim() || null,
       paymentMethod: data.paymentMethod?.trim() || null,
-      paymentStatus: data.paymentStatus ?? "unpaid",
+      paymentStatus,
+      paidAmount: paidAmount.toFixed(2),
       createdBy: session.user.id,
       issuedAt: status === "issued" ? now : null,
       updatedAt: now,
@@ -137,6 +145,17 @@ export async function createInvoice(raw: z.input<typeof createSchema>) {
       sortOrder: line.sortOrder,
     })),
   );
+
+  if (paidAmount > 0) {
+    await db.insert(invoicePayments).values({
+      invoiceId: invoice.id,
+      amount: paidAmount.toFixed(2),
+      method: data.paymentMethod?.trim() || null,
+      paidAt: now,
+      note: "Oluşturma sırasında tam ödeme",
+      createdBy: session.user.id,
+    });
+  }
 
   await writeAuditLog({
     userId: session.user.id,
@@ -279,13 +298,30 @@ export async function cancelInvoice(id: string) {
 
 export async function updateInvoicePaymentStatus(
   id: string,
-  paymentStatus: "unpaid" | "partial" | "paid",
+  paymentStatus: InvoicePaymentStatus,
 ) {
   const session = await requirePermission("INVOICE_MANAGE");
   await ensureInvoiceTables();
+  const invoice = await db.query.invoices.findFirst({
+    where: eq(invoices.id, id),
+  });
+  if (!invoice) return { ok: false as const, error: "NOT_FOUND" };
+
+  const grandTotal = Number(invoice.grandTotal);
+  const paidAmount =
+    paymentStatus === "paid"
+      ? grandTotal
+      : paymentStatus === "unpaid"
+        ? 0
+        : Math.max(0, Math.min(grandTotal, Number(invoice.paidAmount) || grandTotal / 2));
+
   await db
     .update(invoices)
-    .set({ paymentStatus, updatedAt: new Date() })
+    .set({
+      paymentStatus,
+      paidAmount: money(paidAmount).toFixed(2),
+      updatedAt: new Date(),
+    })
     .where(eq(invoices.id, id));
 
   await writeAuditLog({
@@ -293,10 +329,160 @@ export async function updateInvoicePaymentStatus(
     action: "INVOICE_PAYMENT_UPDATE",
     entityType: "invoice",
     entityId: id,
-    after: { paymentStatus },
+    after: { paymentStatus, paidAmount },
   });
 
   revalidatePath(`/admin/invoices/${id}`);
   revalidatePath("/admin/invoices");
   return { ok: true as const };
+}
+
+async function syncInvoicePaidAmount(invoiceId: string, userId?: string | null) {
+  const invoice = await db.query.invoices.findFirst({
+    where: eq(invoices.id, invoiceId),
+  });
+  if (!invoice) return null;
+
+  const [sumRow] = await db
+    .select({
+      total: sql<string>`coalesce(sum(${invoicePayments.amount}), 0)`,
+    })
+    .from(invoicePayments)
+    .where(eq(invoicePayments.invoiceId, invoiceId));
+
+  const paidAmount = money(Number(sumRow?.total ?? 0));
+  const paymentStatus = derivePaymentStatus(Number(invoice.grandTotal), paidAmount);
+
+  await db
+    .update(invoices)
+    .set({
+      paidAmount: paidAmount.toFixed(2),
+      paymentStatus,
+      paymentMethod:
+        paymentStatus === "paid"
+          ? invoice.paymentMethod
+          : invoice.paymentMethod,
+      updatedAt: new Date(),
+    })
+    .where(eq(invoices.id, invoiceId));
+
+  if (userId) {
+    await writeAuditLog({
+      userId,
+      action: "INVOICE_PAYMENT_SYNC",
+      entityType: "invoice",
+      entityId: invoiceId,
+      after: { paidAmount, paymentStatus },
+    });
+  }
+
+  return { paidAmount, paymentStatus, remaining: money(Number(invoice.grandTotal) - paidAmount) };
+}
+
+const paymentSchema = z.object({
+  invoiceId: z.string().uuid(),
+  amount: z.coerce.number().positive(),
+  method: z.string().max(64).optional().nullable(),
+  paidAt: z.string().optional().nullable(),
+  note: z.string().max(500).optional().nullable(),
+});
+
+export async function recordInvoicePayment(raw: z.input<typeof paymentSchema>) {
+  const session = await requirePermission("INVOICE_MANAGE");
+  await ensureInvoiceTables();
+
+  let data: z.infer<typeof paymentSchema>;
+  try {
+    data = paymentSchema.parse(raw);
+  } catch {
+    return { ok: false as const, error: "VALIDATION" };
+  }
+
+  const invoice = await db.query.invoices.findFirst({
+    where: eq(invoices.id, data.invoiceId),
+  });
+  if (!invoice) return { ok: false as const, error: "NOT_FOUND" };
+  if (invoice.status === "cancelled") {
+    return { ok: false as const, error: "CANCELLED" };
+  }
+
+  const remaining = money(Number(invoice.grandTotal) - Number(invoice.paidAmount ?? 0));
+  if (data.amount > remaining + 0.01) {
+    return { ok: false as const, error: "AMOUNT_EXCEEDS" };
+  }
+
+  const paidAt = data.paidAt ? new Date(data.paidAt) : new Date();
+  if (Number.isNaN(paidAt.getTime())) {
+    return { ok: false as const, error: "VALIDATION" };
+  }
+
+  const [payment] = await db
+    .insert(invoicePayments)
+    .values({
+      invoiceId: invoice.id,
+      amount: money(data.amount).toFixed(2),
+      method: data.method?.trim() || invoice.paymentMethod || null,
+      paidAt,
+      note: data.note?.trim() || null,
+      createdBy: session.user.id,
+    })
+    .returning();
+
+  if (!payment) return { ok: false as const, error: "CREATE_FAILED" };
+
+  const synced = await syncInvoicePaidAmount(invoice.id, session.user.id);
+
+  if (data.method?.trim()) {
+    await db
+      .update(invoices)
+      .set({ paymentMethod: data.method.trim(), updatedAt: new Date() })
+      .where(eq(invoices.id, invoice.id));
+  }
+
+  await writeAuditLog({
+    userId: session.user.id,
+    action: "INVOICE_PAYMENT_RECORD",
+    entityType: "invoice_payment",
+    entityId: payment.id,
+    after: { invoiceId: invoice.id, amount: data.amount, method: data.method },
+  });
+
+  revalidatePath(`/admin/invoices/${invoice.id}`);
+  revalidatePath("/admin/invoices");
+  return {
+    ok: true as const,
+    paymentId: payment.id,
+    paidAmount: synced?.paidAmount ?? 0,
+    paymentStatus: synced?.paymentStatus ?? "unpaid",
+    remaining: synced?.remaining ?? 0,
+  };
+}
+
+export async function deleteInvoicePayment(paymentId: string) {
+  const session = await requirePermission("INVOICE_MANAGE");
+  await ensureInvoiceTables();
+
+  const payment = await db.query.invoicePayments.findFirst({
+    where: eq(invoicePayments.id, paymentId),
+  });
+  if (!payment) return { ok: false as const, error: "NOT_FOUND" };
+
+  await db.delete(invoicePayments).where(eq(invoicePayments.id, paymentId));
+  const synced = await syncInvoicePaidAmount(payment.invoiceId, session.user.id);
+
+  await writeAuditLog({
+    userId: session.user.id,
+    action: "INVOICE_PAYMENT_DELETE",
+    entityType: "invoice_payment",
+    entityId: paymentId,
+    before: { amount: payment.amount, invoiceId: payment.invoiceId },
+  });
+
+  revalidatePath(`/admin/invoices/${payment.invoiceId}`);
+  revalidatePath("/admin/invoices");
+  return {
+    ok: true as const,
+    paidAmount: synced?.paidAmount ?? 0,
+    paymentStatus: synced?.paymentStatus ?? "unpaid",
+  };
 }

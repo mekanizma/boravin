@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { invoiceItems, invoices } from "@/lib/db/schema";
+import { invoiceItems, invoicePayments, invoices } from "@/lib/db/schema";
 import { ensureInvoiceTables } from "@/lib/invoices/ensure";
 import {
   INVOICE_STATUS_LABELS,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/invoices/helpers";
 import { InvoiceDocument } from "@/components/admin/invoice-document";
 import { InvoiceActions } from "@/components/admin/invoice-actions";
+import { InvoicePaymentTracker } from "@/components/admin/invoice-payment-tracker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -23,6 +24,7 @@ export default async function AdminInvoiceDetailPage({
   const { id } = await params;
   let invoice: typeof invoices.$inferSelect | null = null;
   let items: (typeof invoiceItems.$inferSelect)[] = [];
+  let payments: (typeof invoicePayments.$inferSelect)[] = [];
 
   try {
     await ensureInvoiceTables();
@@ -31,11 +33,18 @@ export default async function AdminInvoiceDetailPage({
         where: eq(invoices.id, id),
       })) ?? null;
     if (invoice) {
-      items = await db
-        .select()
-        .from(invoiceItems)
-        .where(eq(invoiceItems.invoiceId, invoice.id))
-        .orderBy(asc(invoiceItems.sortOrder));
+      [items, payments] = await Promise.all([
+        db
+          .select()
+          .from(invoiceItems)
+          .where(eq(invoiceItems.invoiceId, invoice.id))
+          .orderBy(asc(invoiceItems.sortOrder)),
+        db
+          .select()
+          .from(invoicePayments)
+          .where(eq(invoicePayments.invoiceId, invoice.id))
+          .orderBy(desc(invoicePayments.paidAt)),
+      ]);
     }
   } catch {
     invoice = null;
@@ -91,6 +100,22 @@ export default async function AdminInvoiceDetailPage({
           </div>
         </div>
       </div>
+
+      <InvoicePaymentTracker
+        invoiceId={invoice.id}
+        grandTotal={Number(invoice.grandTotal)}
+        paidAmount={Number(invoice.paidAmount ?? 0)}
+        paymentStatus={invoice.paymentStatus ?? "unpaid"}
+        defaultMethod={invoice.paymentMethod}
+        cancelled={invoice.status === "cancelled"}
+        payments={payments.map((payment) => ({
+          id: payment.id,
+          amount: payment.amount,
+          method: payment.method,
+          paidAt: payment.paidAt,
+          note: payment.note,
+        }))}
+      />
 
       <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--bv-border)] bg-white">
         <InvoiceDocument

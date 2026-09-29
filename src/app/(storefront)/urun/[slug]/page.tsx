@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 import { ProductGallery } from "@/components/storefront/product-gallery";
 import { ProductBuyPanel } from "@/components/storefront/product-buy-panel";
 import { DetailCard } from "@/components/storefront/detail-card";
+import { ProductReviewsSection } from "@/components/storefront/product-reviews-section";
 import { loadProductCards } from "@/lib/storefront/products";
 import { ProductGrid } from "@/components/storefront/product-grid";
 import { findMockProduct } from "@/lib/mock/storefront";
 import type { Metadata } from "next";
 import { publicImageUrl } from "@/lib/media/url";
+import { getCurrentCustomer } from "@/lib/account/session";
 
 export async function generateMetadata({
   params,
@@ -160,6 +162,17 @@ export default async function ProductDetailPage({
   }
 
   const related = await loadProductCards({ limit: 4 });
+  let defaultReviewName = "";
+  try {
+    const customer = await getCurrentCustomer();
+    if (customer) {
+      defaultReviewName = [customer.firstName, customer.lastName]
+        .filter(Boolean)
+        .join(" ");
+    }
+  } catch {
+    defaultReviewName = "";
+  }
   const images = [...(product.images ?? [])].sort(
     (a, b) =>
       Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder,
@@ -341,6 +354,11 @@ export default async function ProductDetailPage({
           </DetailCard>
         </div>
       </section>
+
+      <ProductReviewsSection
+        productId={product.id}
+        defaultName={defaultReviewName || undefined}
+      />
 
       <section className="mt-14 sm:mt-16">
         <div className="mb-6 flex items-end justify-between gap-4 border-b border-[var(--bv-border)] pb-3">

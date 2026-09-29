@@ -87,5 +87,30 @@ export async function ensureInvoiceTables() {
   await db.execute(
     sql`CREATE INDEX IF NOT EXISTS invoices_customer_idx ON invoices (customer_id)`,
   );
+  await db.execute(sql`
+    ALTER TABLE invoices
+    ADD COLUMN IF NOT EXISTS paid_amount numeric(12, 2) DEFAULT '0' NOT NULL
+  `);
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS invoices_payment_status_idx ON invoices (payment_status)`,
+  );
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS invoice_payments (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      invoice_id uuid NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+      amount numeric(12, 2) NOT NULL,
+      method varchar(64),
+      paid_at timestamp with time zone DEFAULT now() NOT NULL,
+      note text,
+      created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+      created_at timestamp with time zone DEFAULT now() NOT NULL
+    )
+  `);
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS invoice_payments_invoice_idx ON invoice_payments (invoice_id)`,
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS invoice_payments_paid_at_idx ON invoice_payments (paid_at)`,
+  );
   ensured = true;
 }

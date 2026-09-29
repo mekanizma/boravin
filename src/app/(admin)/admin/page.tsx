@@ -96,8 +96,8 @@ async function getDashboardData() {
       todaySales: Number(todaySales[0]?.total ?? 0),
       todayOrders: todaySales[0]?.count ?? 0,
       monthSales: Number(monthSales[0]?.total ?? 0),
-      pending: byStatus.new ?? 0,
-      preparing: byStatus.preparing ?? 0,
+      pending: (byStatus.new ?? 0) + (byStatus.awaiting_payment ?? 0) + (byStatus.accepted ?? 0),
+      preparing: (byStatus.preparing ?? 0) + (byStatus.shipped ?? 0),
       delivered: byStatus.delivered ?? 0,
       cancelled: byStatus.cancelled ?? 0,
       products: productStats[0]?.total ?? 0,
@@ -143,7 +143,10 @@ export default async function AdminDashboardPage() {
       <div>
         <h1 className="font-display text-2xl font-bold">Dashboard</h1>
         <p className="text-sm text-[var(--bv-muted)]">
-          Satış, stok ve kampanya özeti
+          Satış, stok ve kampanya özeti · Detay için{" "}
+          <a href="/admin/reports" className="font-medium text-[var(--bv-teal)] hover:underline">
+            Raporlar
+          </a>
         </p>
       </div>
 
@@ -155,7 +158,7 @@ export default async function AdminDashboardPage() {
           hint={`${data.todayOrders} sipariş`}
         />
         <StatsCard label="Bu ay satış" value={formatCurrency(data.monthSales)} />
-        <StatsCard label="Yeni müşteriler" value={data.customers} />
+        <StatsCard label="Toplam müşteri" value={data.customers} />
         <StatsCard label="Bekleyen sipariş" value={data.pending} />
         <StatsCard label="Hazırlanan" value={data.preparing} />
         <StatsCard label="Teslim edilen" value={data.delivered} />

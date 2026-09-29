@@ -1,7 +1,7 @@
 CREATE TYPE "public"."announcement_type" AS ENUM('top_bar', 'popup', 'homepage_banner', 'campaign_banner');--> statement-breakpoint
 CREATE TYPE "public"."campaign_type" AS ENUM('percent', 'fixed', 'product', 'category', 'brand', 'buy_x_get_y', 'free_shipping', 'coupon');--> statement-breakpoint
 CREATE TYPE "public"."content_status" AS ENUM('draft', 'scheduled', 'published', 'archived');--> statement-breakpoint
-CREATE TYPE "public"."order_status" AS ENUM('new', 'awaiting_payment', 'preparing', 'shipped', 'delivered', 'cancelled', 'returned');--> statement-breakpoint
+CREATE TYPE "public"."order_status" AS ENUM('new', 'awaiting_payment', 'accepted', 'preparing', 'shipped', 'delivered', 'cancelled', 'returned');--> statement-breakpoint
 CREATE TYPE "public"."payment_status" AS ENUM('pending', 'paid', 'failed', 'refunded');--> statement-breakpoint
 CREATE TYPE "public"."product_status" AS ENUM('draft', 'active', 'inactive', 'archived');--> statement-breakpoint
 CREATE TABLE "addresses" (
