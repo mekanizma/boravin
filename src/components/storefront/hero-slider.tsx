@@ -91,7 +91,7 @@ export function HeroSlider() {
 
           <button
             type="button"
-            className="absolute top-1/2 left-2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-black sm:left-3"
+            className="absolute top-1/2 left-3 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-black sm:inline-flex"
             aria-label="Önceki slayt"
             onClick={() => go(index - 1)}
           >
@@ -99,7 +99,7 @@ export function HeroSlider() {
           </button>
           <button
             type="button"
-            className="absolute top-1/2 right-2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-black sm:right-3"
+            className="absolute top-1/2 right-3 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-black sm:inline-flex"
             aria-label="Sonraki slayt"
             onClick={() => go(index + 1)}
           >
