@@ -1,0 +1,16 @@
+import { SiteHeader } from "@/components/storefront/site-header";
+import { SiteFooter } from "@/components/storefront/site-footer";
+
+export default function StorefrontLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-dvh flex-col bg-white">
+      <SiteHeader />
+      <main className="relative flex-1 bg-[#e8edf1]">{children}</main>
+      <SiteFooter />
+    </div>
+  );
+}

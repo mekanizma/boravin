@@ -1,0 +1,67 @@
+/* BORAVIN — white stage, red signal. */
+:root {
+  --bv-ink: #121417;
+  --bv-graphite: #1e2228;
+  --bv-slate: #4a5560;
+  --bv-muted: #7a8490;
+  --bv-fog: #f6f6f6;
+  --bv-paper: #ffffff;
+  --bv-white: #ffffff;
+  --bv-teal: #e3000f;
+  --bv-teal-hover: #c4000c;
+  --bv-teal-soft: #fff1f1;
+  --bv-sale: #e3000f;
+  --bv-sale-hover: #c4000c;
+  --bv-sale-soft: #fff1f1;
+  --bv-steel: #e3000f;
+  --bv-steel-soft: #fff1f1;
+  --bv-copper: #e3000f;
+  --bv-copper-hover: #c4000c;
+  --bv-concrete: #f2f4f6;
+  --bv-success: #1b7f5a;
+  --bv-warning: #b45309;
+  --bv-danger: #c81e1e;
+  --bv-border: #e4e8ec;
+  --bv-border-strong: #c5ccd4;
+
+  --background: var(--bv-paper);
+  --foreground: var(--bv-ink);
+  --card: var(--bv-white);
+  --card-foreground: var(--bv-ink);
+  --primary: var(--bv-sale);
+  --primary-foreground: var(--bv-white);
+  --accent: var(--bv-teal);
+  --accent-foreground: var(--bv-white);
+  --muted: var(--bv-fog);
+  --muted-foreground: var(--bv-muted);
+  --destructive: var(--bv-danger);
+  --ring: var(--bv-teal);
+  --border: var(--bv-border);
+
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: 0 24px 48px rgba(18, 20, 23, 0.08);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 160ms;
+  --duration-base: 280ms;
+  --duration-slow: 500ms;
+
+  --header-height: 4.25rem;
+  --header-height-compact: 3.5rem;
+  --container: 88rem;
+  --admin-sidebar: 16rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+}

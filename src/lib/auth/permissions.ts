@@ -1,0 +1,73 @@
+export const PERMISSIONS = [
+  "PRODUCT_CREATE",
+  "PRODUCT_EDIT",
+  "PRODUCT_DELETE",
+  "PRODUCT_VIEW",
+  "CATEGORY_MANAGE",
+  "BRAND_MANAGE",
+  "ORDER_VIEW",
+  "ORDER_EDIT",
+  "INVOICE_VIEW",
+  "INVOICE_MANAGE",
+  "CUSTOMER_VIEW",
+  "CUSTOMER_EDIT",
+  "CAMPAIGN_CREATE",
+  "CAMPAIGN_EDIT",
+  "COUPON_MANAGE",
+  "CONTENT_MANAGE",
+  "MEDIA_MANAGE",
+  "SETTINGS_MANAGE",
+  "AI_USE",
+  "AUDIT_VIEW",
+  "ANALYTICS_VIEW",
+  "USER_MANAGE",
+] as const;
+
+export type PermissionCode = (typeof PERMISSIONS)[number];
+
+export const ROLE_CODES = [
+  "SUPER_ADMIN",
+  "ADMIN",
+  "PRODUCT_MANAGER",
+  "ORDER_MANAGER",
+  "CONTENT_MANAGER",
+  "MARKETING_MANAGER",
+] as const;
+
+export type RoleCode = (typeof ROLE_CODES)[number];
+
+export const ROLE_PERMISSION_MAP: Record<RoleCode, PermissionCode[]> = {
+  SUPER_ADMIN: [...PERMISSIONS],
+  ADMIN: PERMISSIONS.filter((p) => p !== "USER_MANAGE"),
+  PRODUCT_MANAGER: [
+    "PRODUCT_CREATE",
+    "PRODUCT_EDIT",
+    "PRODUCT_DELETE",
+    "PRODUCT_VIEW",
+    "CATEGORY_MANAGE",
+    "BRAND_MANAGE",
+    "MEDIA_MANAGE",
+  ],
+  ORDER_MANAGER: [
+    "ORDER_VIEW",
+    "ORDER_EDIT",
+    "INVOICE_VIEW",
+    "INVOICE_MANAGE",
+    "CUSTOMER_VIEW",
+  ],
+  CONTENT_MANAGER: [
+    "CONTENT_MANAGE",
+    "MEDIA_MANAGE",
+    "PRODUCT_VIEW",
+    "AI_USE",
+  ],
+  MARKETING_MANAGER: [
+    "CAMPAIGN_CREATE",
+    "CAMPAIGN_EDIT",
+    "COUPON_MANAGE",
+    "CONTENT_MANAGE",
+    "AI_USE",
+    "ANALYTICS_VIEW",
+    "PRODUCT_VIEW",
+  ],
+};

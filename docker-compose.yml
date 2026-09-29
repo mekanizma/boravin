@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: boravin-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: boravin
+      POSTGRES_PASSWORD: boravin
+      POSTGRES_DB: boravin
+    volumes:
+      - boravin_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boravin -d boravin"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: boravin-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: boravin
+      MINIO_ROOT_PASSWORD: boravinsecret
+    command: server /data --console-address ":9001"
+    volumes:
+      - boravin_minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      mc alias set local http://minio:9000 boravin boravinsecret;
+      mc mb -p local/boravin-media || true;
+      mc anonymous set download local/boravin-media || true;
+      exit 0;
+      "
+
+volumes:
+  boravin_pg_data:
+  boravin_minio_data:

@@ -1,0 +1,234 @@
+import "server-only";
+
+import {
+  barcodeCandidates,
+  mapIcecatProduct,
+  mapOpenFactsProduct,
+  mapUpcitemdbProduct,
+} from "@/lib/barcode/parse";
+import type { ProductDraft } from "@/lib/barcode/types";
+import { lookupWebFallbacks } from "@/lib/barcode/web-lookup";
+
+const USER_AGENT = "Boravin/1.0 (admin barcode import; +https://www.boravin.com)";
+
+export type ExternalLookup = {
+  draft: ProductDraft | null;
+  offline: boolean;
+};
+
+async function fetchJson(url: string, timeoutMs = 4500): Promise<unknown | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": USER_AGENT,
+      },
+      cache: "no-store",
+    });
+    const body = (await response.json().catch(() => null)) as unknown;
+    if (!response.ok && body == null) return { __httpStatus: response.status };
+    return body ?? { __httpStatus: response.status };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function icecatUrls(code: string): string[] {
+  const username = process.env.ICECAT_USERNAME?.trim();
+  const appKey = process.env.ICECAT_APP_KEY?.trim();
+  const urls: string[] = [];
+
+  // Prefer Turkish datasheets, then English (many electronics only have EN).
+  for (const lang of ["TR", "en"] as const) {
+    if (username && appKey) {
+      const params = new URLSearchParams({
+        UserName: username,
+        Language: lang,
+        GTIN: code,
+        app_key: appKey,
+      });
+      urls.push(`https://live.icecat.biz/api?${params.toString()}`);
+      continue;
+    }
+    const openParams = new URLSearchParams({
+      lang,
+      shopname: "openIcecat-live",
+      GTIN: code,
+      content: "",
+    });
+    urls.push(`https://live.icecat.biz/api?${openParams.toString()}`);
+  }
+  return urls;
+}
+
+function upcitemdbUrl(code: string) {
+  const key = process.env.UPCITEMDB_USER_KEY?.trim();
+  if (key) {
+    const params = new URLSearchParams({ upc: code });
+    return `https://api.upcitemdb.com/prod/v1/lookup?${params.toString()}`;
+  }
+  return `https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`;
+}
+
+async function fetchUpcitemdb(code: string): Promise<unknown | null> {
+  const key = process.env.UPCITEMDB_USER_KEY?.trim();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4500);
+  try {
+    const response = await fetch(upcitemdbUrl(code), {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": USER_AGENT,
+        ...(key ? { user_key: key, key_type: "3scale" } : {}),
+      },
+      cache: "no-store",
+    });
+    return (await response.json().catch(() => null)) as unknown;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function factsUrl(host: string, code: string) {
+  const fields = [
+    "product_name",
+    "product_name_tr",
+    "product_name_en",
+    "generic_name",
+    "generic_name_tr",
+    "brands",
+    "categories",
+    "quantity",
+    "ingredients_text",
+    "ingredients_text_tr",
+    "image_front_url",
+    "image_url",
+    "selected_images",
+    "code",
+  ].join(",");
+  return `https://${host}/api/v2/product/${encodeURIComponent(code)}.json?fields=${fields}`;
+}
+
+async function firstDraft(
+  codes: string[],
+  tryCode: (code: string) => Promise<{ draft: ProductDraft | null; networkError: boolean }>,
+): Promise<{ draft: ProductDraft | null; sawResponse: boolean; sawNetworkError: boolean }> {
+  let sawResponse = false;
+  let sawNetworkError = false;
+  for (const code of codes) {
+    const result = await tryCode(code);
+    if (result.networkError) {
+      sawNetworkError = true;
+      continue;
+    }
+    sawResponse = true;
+    if (result.draft) return { draft: result.draft, sawResponse, sawNetworkError };
+  }
+  return { draft: null, sawResponse, sawNetworkError };
+}
+
+function isIcecatMiss(payload: unknown): boolean {
+  const body = payload as { msg?: string; Message?: string; Code?: number };
+  if (body?.msg === "OK") return false;
+  if (body?.Code === 400) return true;
+  return /GTIN can not be found/i.test(body?.Message ?? "");
+}
+
+async function lookupOpenFacts(
+  host: string,
+  source: "openproductsfacts" | "openfoodfacts" | "openbeautyfacts",
+  codes: string[],
+  barcode: string,
+): Promise<{ draft: ProductDraft | null; sawResponse: boolean; sawNetworkError: boolean }> {
+  let sawResponse = false;
+  let sawNetworkError = false;
+  for (const code of codes) {
+    const payload = await fetchJson(factsUrl(host, code));
+    if (payload == null) {
+      sawNetworkError = true;
+      continue;
+    }
+    sawResponse = true;
+    const draft = mapOpenFactsProduct(payload, barcode, source);
+    if (draft) return { draft, sawResponse, sawNetworkError };
+  }
+  return { draft: null, sawResponse, sawNetworkError };
+}
+
+/**
+ * Live lookup against free public catalogs, then web search fallbacks.
+ * Catalogs run in parallel with a short budget so the admin UI does not hang.
+ */
+export async function lookupBarcodeExternal(barcode: string): Promise<ExternalLookup> {
+  const codes = barcodeCandidates(barcode);
+  let sawResponse = false;
+  let sawNetworkError = false;
+
+  const catalogPromise = (async (): Promise<ExternalLookup | null> => {
+    const icecat = await firstDraft(codes, async (code) => {
+      let networkError = true;
+      for (const url of icecatUrls(code)) {
+        const payload = await fetchJson(url, 5000);
+        if (payload == null) continue;
+        networkError = false;
+        const draft = mapIcecatProduct(payload, barcode);
+        if (draft) return { draft, networkError: false };
+        if (isIcecatMiss(payload)) break;
+      }
+      return { draft: null, networkError };
+    });
+    if (icecat.draft) return { draft: icecat.draft, offline: false };
+
+    const upc = await firstDraft(codes, async (code) => {
+      const payload = await fetchUpcitemdb(code);
+      if (payload == null) return { draft: null, networkError: true };
+      const draft = mapUpcitemdbProduct(payload, barcode);
+      return { draft, networkError: false };
+    });
+    if (upc.draft) return { draft: upc.draft, offline: false };
+
+    for (const [host, source] of [
+      ["world.openproductsfacts.org", "openproductsfacts"],
+      ["world.openfoodfacts.org", "openfoodfacts"],
+      ["world.openbeautyfacts.org", "openbeautyfacts"],
+    ] as const) {
+      const facts = await lookupOpenFacts(host, source, codes, barcode);
+      if (facts.draft) return { draft: facts.draft, offline: false };
+    }
+    return null;
+  })();
+
+  const webPromise = lookupWebFallbacks(barcode);
+
+  // Prefer a catalog hit, but don't wait forever before starting to care about web.
+  const catalog = await Promise.race([
+    catalogPromise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+  ]);
+  if (catalog?.draft) return catalog;
+
+  const catalogFinal = await catalogPromise;
+  if (catalogFinal?.draft) return catalogFinal;
+
+  const web = await Promise.race([
+    webPromise,
+    new Promise<{ draft: null; networkError: boolean }>((resolve) =>
+      setTimeout(() => resolve({ draft: null, networkError: true }), 24000),
+    ),
+  ]);
+  if (web.draft) return { draft: web.draft, offline: false };
+  sawNetworkError ||= web.networkError;
+
+  return {
+    draft: null,
+    offline: sawNetworkError && !sawResponse,
+  };
+}
