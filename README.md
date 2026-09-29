@@ -150,6 +150,21 @@ npm run db:sync-customers                # Auth → public.customers
 
 Alternatif: Supabase Dashboard → SQL Editor → `supabase/migrations/20260229194500_customer_addresses_rls.sql` içeriğini çalıştırın.
 
+### Ürün silme (Supabase)
+
+Admin ürün silme için:
+
+- `homepage_section_items.product_id` FK → **ON DELETE SET NULL** (anasayfa bağlantısı silmeyi engellemesin)
+- `PRODUCT_CREATE` / `PRODUCT_EDIT` / `PRODUCT_DELETE` / `PRODUCT_VIEW` izinleri + `SUPER_ADMIN` / `ADMIN` / `PRODUCT_MANAGER` rollerine bağlama
+
+```bash
+npm run db:supabase:product-delete
+# veya
+npm run db:migrate:deploy
+```
+
+Alternatif: Supabase Dashboard → SQL Editor → `supabase/migrations/20260329193000_product_delete_support.sql`
+
 ## Notlar
 
 - Docker kapalıysa uygulama UI render eder; DB bağımlı listeler empty state gösterir.

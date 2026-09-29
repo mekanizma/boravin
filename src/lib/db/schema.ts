@@ -819,7 +819,9 @@ export const homepageSectionItems = pgTable("homepage_section_items", {
   imageUrl: text("image_url"),
   linkUrl: text("link_url"),
   buttonLabel: varchar("button_label", { length: 80 }),
-  productId: uuid("product_id").references(() => products.id),
+  productId: uuid("product_id").references(() => products.id, {
+    onDelete: "set null",
+  }),
   sortOrder: integer("sort_order").default(0).notNull(),
   meta: jsonb("meta").$type<Record<string, unknown>>().default({}),
 });

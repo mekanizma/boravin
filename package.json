@@ -25,6 +25,7 @@
     "db:sync-auth": "tsx scripts/sync-supabase-auth.ts",
     "db:sync-customers": "tsx scripts/sync-customers.ts",
     "db:supabase:customer-addresses": "node scripts/apply-supabase-customer-addresses.mjs",
+    "db:supabase:product-delete": "node scripts/apply-supabase-product-delete.mjs",
     "db:stamp-migrations": "node scripts/stamp-drizzle-migrations.mjs",
     "db:clear-mock": "tsx scripts/clear-mock.ts",
     "db:tag-mock": "tsx scripts/tag-mock.ts",
