@@ -1,16 +1,42 @@
-import { eq } from "drizzle-orm";
-import { getDb, isTransientDbError, recoverDb } from "@/lib/db";
-import {
-  brands,
-  categories,
-  productVariants,
-  products,
-} from "@/lib/db/schema";
+import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import { formatCurrency } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { getDb, isTransientDbError, recoverDb } from "@/lib/db";
+import { brands, categories, products } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
+import { EditProductForm } from "@/components/admin/edit-product-form";
+
+async function queryOptions() {
+  const database = getDb();
+  const [categoryRows, brandRows] = await Promise.all([
+    database
+      .select({
+        id: categories.id,
+        name: categories.name,
+        parentId: categories.parentId,
+        sortOrder: categories.sortOrder,
+      })
+      .from(categories)
+      .where(eq(categories.isActive, true))
+      .orderBy(asc(categories.sortOrder), asc(categories.name)),
+    database
+      .select({ id: brands.id, name: brands.name })
+      .from(brands)
+      .where(eq(brands.isActive, true))
+      .orderBy(asc(brands.name)),
+  ]);
+  const byId = new Map(categoryRows.map((row) => [row.id, row]));
+  return {
+    categories: categoryRows.map((row) => {
+      const parent = row.parentId ? byId.get(row.parentId) : undefined;
+      return {
+        id: row.id,
+        label: parent ? `${parent.name} / ${row.name}` : row.name,
+      };
+    }),
+    brands: brandRows,
+  };
+}
 
 async function loadAdminProduct(id: string) {
   const run = async () => {
@@ -19,26 +45,8 @@ async function loadAdminProduct(id: string) {
       where: eq(products.id, id),
     });
     if (!product) return null;
-    const [brand, category, variants] = await Promise.all([
-      product.brandId
-        ? database.query.brands.findFirst({ where: eq(brands.id, product.brandId) })
-        : Promise.resolve(null),
-      product.categoryId
-        ? database.query.categories.findFirst({
-            where: eq(categories.id, product.categoryId),
-          })
-        : Promise.resolve(null),
-      database
-        .select()
-        .from(productVariants)
-        .where(eq(productVariants.productId, product.id)),
-    ]);
-    return {
-      ...product,
-      brand: brand ?? null,
-      category: category ?? null,
-      variants,
-    };
+    const options = await queryOptions();
+    return { product, ...options };
   };
 
   try {
@@ -50,66 +58,67 @@ async function loadAdminProduct(id: string) {
   }
 }
 
-export default async function AdminProductDetailPage({
+export default async function AdminProductEditPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const product = await loadAdminProduct(id);
-  if (!product) notFound();
+  const data = await loadAdminProduct(id);
+  if (!data) notFound();
+  const { product, categories, brands } = data;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-5 pb-28 sm:pb-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold">{product.name}</h1>
-          <p className="text-sm text-[var(--bv-muted)]">
+          <p className="text-[11px] font-semibold tracking-[0.16em] text-[var(--bv-muted)] uppercase">
+            Ürün düzenle
+          </p>
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight">
+            {product.name}
+          </h1>
+          <p className="mt-1 text-sm text-[var(--bv-muted)]">
             SKU: {product.sku}
             {product.barcode ? ` · Barkod: ${product.barcode}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={`/admin/stock?q=${encodeURIComponent(product.sku)}`}>
-            <Button variant="accent">Stok hareketi</Button>
+            <Button variant="outline">Stok hareketi</Button>
           </Link>
-          <Link href="/admin/products">
-            <Button variant="outline">Listeye dön</Button>
-          </Link>
+          {product.slug ? (
+            <Link href={`/urun/${product.slug}`} target="_blank">
+              <Button variant="outline">Mağazada gör</Button>
+            </Link>
+          ) : null}
         </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-[var(--radius-lg)] border border-[var(--bv-border)] bg-white p-4">
-          <p className="text-xs text-[var(--bv-muted)]">Fiyat</p>
-          <p className="mt-1 font-semibold">
-            {formatCurrency(Number(product.price))}
-          </p>
-        </div>
-        <div className="rounded-[var(--radius-lg)] border border-[var(--bv-border)] bg-white p-4">
-          <p className="text-xs text-[var(--bv-muted)]">Stok</p>
-          <p className="mt-1 font-semibold">{product.stock}</p>
-        </div>
-        <div className="rounded-[var(--radius-lg)] border border-[var(--bv-border)] bg-white p-4">
-          <p className="text-xs text-[var(--bv-muted)]">Durum</p>
-          <div className="mt-1">
-            <Badge tone={product.status === "active" ? "success" : "neutral"}>
-              {product.status}
-            </Badge>
-          </div>
-        </div>
-        <div className="rounded-[var(--radius-lg)] border border-[var(--bv-border)] bg-white p-4">
-          <p className="text-xs text-[var(--bv-muted)]">Varyant</p>
-          <p className="mt-1 font-semibold">{product.variants?.length ?? 0}</p>
-        </div>
-      </div>
-      {product.description ? (
-        <div className="rounded-[var(--radius-lg)] border border-[var(--bv-border)] bg-white p-4">
-          <h2 className="font-semibold">Açıklama</h2>
-          <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--bv-slate)]">
-            {product.description}
-          </p>
-        </div>
-      ) : null}
+
+      <EditProductForm
+        product={{
+          id: product.id,
+          name: product.name,
+          sku: product.sku,
+          barcode: product.barcode,
+          slug: product.slug,
+          categoryId: product.categoryId,
+          brandId: product.brandId,
+          shortDescription: product.shortDescription,
+          description: product.description,
+          price: String(product.price),
+          compareAtPrice: product.compareAtPrice
+            ? String(product.compareAtPrice)
+            : null,
+          stock: product.stock,
+          status: product.status,
+          isFeatured: product.isFeatured,
+          isNew: product.isNew,
+          isCampaign: product.isCampaign,
+        }}
+        categories={categories}
+        brands={brands}
+      />
     </div>
   );
 }

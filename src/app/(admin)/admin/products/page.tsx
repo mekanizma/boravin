@@ -5,6 +5,7 @@ import { products } from "@/lib/db/schema";
 import { AdminTable } from "@/components/admin/admin-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ProductRowActions } from "@/components/admin/product-row-actions";
 import { formatCurrency } from "@/lib/utils";
 
 async function loadProducts() {
@@ -20,7 +21,7 @@ async function loadProducts() {
       })
       .from(products)
       .orderBy(desc(products.updatedAt))
-      .limit(50);
+      .limit(100);
   } catch {
     return [] as Array<{
       id: string;
@@ -50,6 +51,7 @@ export default async function AdminProductsPage() {
 
       <AdminTable
         rows={rows}
+        emptyMessage="Henüz ürün yok. Yeni ürün ekleyerek başlayın."
         columns={[
           {
             key: "name",
@@ -99,6 +101,12 @@ export default async function AdminProductsPage() {
                 {r.status}
               </Badge>
             ),
+          },
+          {
+            key: "actions",
+            header: "İşlem",
+            className: "w-[1%] whitespace-nowrap text-right",
+            cell: (r) => <ProductRowActions id={r.id} name={r.name} />,
           },
         ]}
       />

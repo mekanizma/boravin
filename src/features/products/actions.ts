@@ -11,6 +11,7 @@ import {
   brands,
   categories,
   stockMovements,
+  homepageSectionItems,
 } from "@/lib/db/schema";
 import { requirePermission, writeAuditLog } from "@/lib/auth/rbac";
 import { slugify } from "@/lib/utils";
@@ -283,6 +284,43 @@ export async function updateProduct(
   revalidatePath(`/urun/${updated.slug}`);
   return updated;
 }
+
+export async function deleteProduct(id: string) {
+  const session = await requirePermission("PRODUCT_DELETE");
+  const before = await db.query.products.findFirst({
+    where: eq(products.id, id),
+  });
+  if (!before) {
+    return { ok: false as const, error: "NOT_FOUND" as const };
+  }
+
+  try {
+    await db
+      .update(homepageSectionItems)
+      .set({ productId: null })
+      .where(eq(homepageSectionItems.productId, id));
+
+    await db.delete(products).where(eq(products.id, id));
+  } catch (error) {
+    console.error("[deleteProduct]", error);
+    return { ok: false as const, error: "DELETE_FAILED" as const };
+  }
+
+  await writeAuditLog({
+    userId: session.user.id,
+    action: "PRODUCT_DELETE",
+    entityType: "product",
+    entityId: id,
+    before,
+  });
+
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/stock");
+  revalidatePath("/urunler");
+  revalidatePath(`/urun/${before.slug}`);
+  return { ok: true as const };
+}
+
 
 export async function bulkUpdateProducts(input: {
   ids: string[];
