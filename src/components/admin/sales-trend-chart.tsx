@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   Area,
   AreaChart,
@@ -15,9 +16,18 @@ export function SalesTrendChart({
 }: {
   data: { day: string; total: number }[];
 }) {
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="h-64 w-full animate-pulse rounded-md bg-[var(--bv-concrete)]" />;
+  }
+
   return (
     <div className="h-64 w-full">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
         <AreaChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e2db" />
           <XAxis dataKey="day" tick={{ fontSize: 12 }} />

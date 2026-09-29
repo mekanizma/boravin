@@ -19,8 +19,23 @@ function needsSsl(url) {
     url.includes("render.com") ||
     url.includes("supabase.co") ||
     url.includes("pooler.supabase.com") ||
+    Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID) ||
     process.env.NODE_ENV === "production"
   );
+}
+
+function sslOption(url) {
+  if (!needsSsl(url)) return undefined;
+  const onRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID);
+  if (
+    onRender ||
+    url.includes("render.com") ||
+    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "0" ||
+    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "false"
+  ) {
+    return { rejectUnauthorized: false };
+  }
+  return "require";
 }
 
 async function main() {
@@ -35,12 +50,12 @@ async function main() {
 
   const folder = path.join(root, "drizzle", "migrations");
   console.log(`[migrate] folder=${folder}`);
-  console.log(`[migrate] ssl=${needsSsl(url) ? "require" : "off"}`);
+  console.log(`[migrate] ssl=${needsSsl(url) ? "on" : "off"}`);
 
   const sql = postgres(url, {
     max: 1,
     prepare: false,
-    ssl: needsSsl(url) ? "require" : undefined,
+    ssl: sslOption(url),
   });
 
   try {

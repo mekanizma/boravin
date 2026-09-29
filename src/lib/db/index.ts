@@ -82,14 +82,16 @@ function createDb(): AppDatabase {
     process.env.DATABASE_URL ??
     "postgresql://boravin:boravin@localhost:5432/boravin";
 
+  const onRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID);
   const managedHost =
+    onRender ||
     connectionString.includes("supabase.co") ||
     connectionString.includes("pooler.supabase.com") ||
     connectionString.includes("render.com") ||
-    connectionString.includes(".oregon-postgres.render.com") ||
-    connectionString.includes(".frankfurt-postgres.render.com") ||
-    connectionString.includes("-a.oregon-postgres.render.com") ||
-    /[.-]postgres\.render\.com/.test(connectionString);
+    /[.-]postgres\.render\.com/.test(connectionString) ||
+    /^postgresql:\/\/[^@]+@dpg-[a-z0-9-]+(?:-a)?[:/]/i.test(
+      connectionString,
+    );
 
   const sslFlag = (process.env.DATABASE_SSL ?? "").toLowerCase();
   const forceSsl =
@@ -101,18 +103,31 @@ function createDb(): AppDatabase {
     sslFlag === "0" || sslFlag === "false" || sslFlag === "disable";
   const useSsl = !disableSsl && (forceSsl || managedHost);
 
+  // Render internal Postgres presents self-signed certs; Node rejects them by default.
+  const allowInsecureSsl =
+    onRender ||
+    connectionString.includes("render.com") ||
+    /[.-]postgres\.render\.com/.test(connectionString) ||
+    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "0" ||
+    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "false";
+
+  const ssl = !useSsl
+    ? undefined
+    : allowInsecureSsl
+      ? { rejectUnauthorized: false }
+      : ("require" as const);
+
   const sql =
     globalForDb.boravinSql ??
     postgres(connectionString, {
       max: managedHost ? 5 : 10,
       idle_timeout: 20,
       prepare: false,
-      ssl: useSsl ? "require" : undefined,
+      ssl,
     });
 
-  if (process.env.NODE_ENV !== "production") {
-    globalForDb.boravinSql = sql;
-  }
+  // Always reuse the pool — production previously leaked a client per request.
+  globalForDb.boravinSql = sql;
 
   return drizzlePostgres(sql, { schema });
 }
