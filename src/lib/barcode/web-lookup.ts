@@ -417,20 +417,32 @@ export async function lookupGoogleHeadless(barcode: string): Promise<ProductDraf
     const shortDescription = `${title}${brand ? ` (${brand})` : ""}`.slice(0, 180);
     const pageUrls = hits
       .map((hit) => hit.url)
-      .filter((url) => /^https:\/\//i.test(url) && /\/products?\//i.test(url));
+      .filter(
+        (url) =>
+          /^https:\/\//i.test(url) &&
+          (/\/products?\//i.test(url) ||
+            /trendyol|hepsiburada|amazon\.|kozmetikara|xenon/i.test(url)),
+      );
+    const seedImages = hits
+      .map((hit) => hit.imageUrl)
+      .filter((url): url is string => Boolean(url && isSafePublicImageUrl(url)));
     // Image scrape can take a few seconds (official shop OG + DDG fallback).
-    const imageUrls =
+    const scrapedImages =
       (await Promise.race([
         enrichImagesFromGoogleHits(
-          hits.filter((hit) =>
-            hit.snippet.includes(barcode) ||
-            /\/products?\//i.test(hit.url) ||
-            /xenon|camera|kamera|security|güvenlik|ptz|shop\./i.test(`${hit.title} ${hit.url}`),
+          hits.filter(
+            (hit) =>
+              hit.snippet.includes(barcode) ||
+              /\/products?\//i.test(hit.url) ||
+              /xenon|camera|kamera|security|güvenlik|ptz|shop\.|trendyol|amazon|kozmetikara/i.test(
+                `${hit.title} ${hit.url}`,
+              ),
           ),
           title,
         ),
         new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 5000)),
       ])) ?? [];
+    const imageUrls = [...seedImages, ...scrapedImages];
 
     return hitToDraft(
       {

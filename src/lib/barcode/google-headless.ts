@@ -4,11 +4,16 @@ import { accessSync, constants } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "puppeteer-core";
 import { isSafePublicImageUrl } from "@/lib/barcode/parse";
+import {
+  decodeSwisscowsJwtPayload,
+  swisscowsSignRequest,
+} from "@/lib/barcode/swisscows-sign";
 
 export type GoogleOrganicHit = {
   title: string;
   url: string;
   snippet: string;
+  imageUrl?: string;
 };
 
 const JUNK_HOST =
@@ -161,7 +166,9 @@ function rankHits(raw: GoogleOrganicHit[], barcode: string): GoogleOrganicHit[] 
     if (/xenon/.test(blob)) score += 4;
     if (/camera|kamera|security|güvenlik|ptz|ip65/.test(blob)) score += 3;
     if (/\/product\//i.test(hit.url) || /\/products\//i.test(hit.url)) score += 2;
-    if (/shop\.|xenonsmart|official/i.test(hit.url)) score += 3;
+    if (/shop\.|xenonsmart|official|kozmetikara|trendyol|hepsiburada|amazon\./i.test(hit.url)) {
+      score += 3;
+    }
     if (/stock code|barkod|gtin|upc|ean/i.test(snippet)) score += 2;
     if (/makeup|cosmetic|allergen|perfume|nuts|nutrition/i.test(blob)) score -= 5;
     if (score < 3) continue;
@@ -417,13 +424,81 @@ export function parseGoogleSearchHtml(html: string, barcode: string): GoogleOrga
 }
 
 /**
- * Web search for retail GTINs. Brave/Google are often CAPTCHA-blocked from
- * datacenter/home IPs; Swisscows (via local Chrome) is the reliable path.
+ * Signed Swisscows web search API — works on Render without Chrome.
+ * Returns the same retail hits Google surfaces for many GTINs (Trendyol/Amazon style pages).
  */
-export async function searchGoogleHeadless(barcode: string): Promise<GoogleOrganicHit[]> {
-  if (process.env.BARCODE_GOOGLE_HEADLESS === "0") return [];
+export async function searchSwisscowsApi(barcode: string): Promise<GoogleOrganicHit[]> {
   const digits = barcode.replace(/\D/g, "");
   if (!digits) return [];
+
+  const path = "/v5/web/search";
+  const params = {
+    query: digits,
+    offset: 0,
+    itemsCount: 10,
+    locale: "tr-TR",
+    freshness: "All",
+    spellcheck: true,
+  };
+  const { nonce, signature } = swisscowsSignRequest(params, path);
+  const qs = new URLSearchParams(
+    Object.entries(params).map(([key, value]) => [key, String(value)]),
+  ).toString();
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(`https://api.swisscows.com${path}?${qs}`, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        Referer: "https://swisscows.com/",
+        "X-Referer": `https://swisscows.com/en/web?query=${digits}`,
+        "X-Request-Nonce": nonce,
+        "X-Request-Signature": signature,
+        "Cache-Control": "no-cache",
+      },
+      cache: "no-store",
+    });
+    if (!response.ok) return [];
+    const json = (await response.json().catch(() => null)) as { payload?: string } | null;
+    if (!json?.payload) return [];
+    const decoded = decodeSwisscowsJwtPayload(json.payload);
+    const items = decoded?.items ?? [];
+    const raw: GoogleOrganicHit[] = items
+      .filter((item) => item.type === "WebPage" || Boolean(item.name))
+      .map((item) => ({
+        title: stripTags(item.name ?? ""),
+        url: item.url ?? "",
+        snippet: stripTags(item.description ?? "").slice(0, 400),
+        imageUrl: item.thumbnail?.url,
+      }));
+    return rankHits(raw, digits);
+  } catch (error) {
+    console.error(
+      "[barcode-web] swisscows-api",
+      error instanceof Error ? error.message : error,
+    );
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Web search for retail GTINs. Prefers Swisscows signed API (no Chrome).
+ * Brave/puppeteer remain optional fallbacks when headless is enabled.
+ */
+export async function searchGoogleHeadless(barcode: string): Promise<GoogleOrganicHit[]> {
+  const digits = barcode.replace(/\D/g, "");
+  if (!digits) return [];
+
+  const apiHits = await withTimeout(searchSwisscowsApi(digits), 8500, "swisscows-api");
+  if (apiHits?.length) return apiHits;
+
+  if (process.env.BARCODE_GOOGLE_HEADLESS === "0") return [];
 
   const braveHits = await withTimeout(searchBraveFetch(digits), 5500, "brave-fetch");
   if (braveHits?.length) return braveHits;
@@ -485,9 +560,14 @@ export async function enrichImagesFromGoogleHits(
   titleHint = "",
 ): Promise<string[]> {
   const images: string[] = [];
+  for (const hit of hits) {
+    if (hit.imageUrl && isUsefulProductImage(hit.imageUrl, titleHint)) {
+      images.push(hit.imageUrl);
+    }
+  }
   const pageUrls = [
     ...hits
-      .filter((hit) => /\/products?\//i.test(hit.url) || /shop\.|xenon|trendyol|hepsiburada/i.test(hit.url))
+      .filter((hit) => /\/products?\//i.test(hit.url) || /shop\.|xenon|trendyol|hepsiburada|kozmetikara|amazon/i.test(hit.url))
       .map((hit) => hit.url),
     ...hits.map((hit) => hit.url),
   ].filter((url, index, all) => url && all.indexOf(url) === index);

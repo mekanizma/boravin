@@ -3,7 +3,7 @@ import "server-only";
 import type { RequestOptions } from "@google/generative-ai";
 
 /** Widely available Flash model; override with GEMINI_MODEL if needed. */
-export const GEMINI_FREE_MODEL = "gemini-2.5-flash";
+export const GEMINI_FREE_MODEL = "gemini-3.8-flash";
 
 export function geminiApiKey(): string | null {
   const key = process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_AI_API_KEY?.trim();

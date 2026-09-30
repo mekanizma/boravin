@@ -239,3 +239,25 @@ describe("mapWebSearchProduct", () => {
     expect(draft?.imageUrls[1]).toBe("https://cdn.shopify.com/s/files/1/prod.jpg");
   });
 });
+
+describe("swisscowsSignRequest", () => {
+  it("flips case while rotating letters", async () => {
+    const { swisscowsRot, swisscowsSignRequest } = await import("@/lib/barcode/swisscows-sign");
+    expect(swisscowsRot("BC88nLcJv6ia70mi2AygNxsHuAsEbJtE")).toBe(
+      "op88AyPwI6VN70ZV2nLTaKFuHnFrOwGr",
+    );
+    const signed = swisscowsSignRequest(
+      {
+        query: "753512412860",
+        offset: 0,
+        itemsCount: 10,
+        locale: "tr-TR",
+        freshness: "All",
+        spellcheck: true,
+      },
+      "/v5/web/search",
+      "BC88nLcJv6ia70mi2AygNxsHuAsEbJtE",
+    );
+    expect(signed.signature).toBe("veT0un90BUvRovuLEXbn76r15F6bWOj3cCORLgS-MUc");
+  });
+});
