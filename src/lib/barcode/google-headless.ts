@@ -173,7 +173,13 @@ function rankHits(raw: GoogleOrganicHit[], barcode: string): GoogleOrganicHit[] 
     if (/makeup|cosmetic|allergen|perfume|nuts|nutrition/i.test(blob)) score -= 5;
     if (score < 3) continue;
     seen.add(key);
-    out.push({ title, url: hit.url, snippet: stripTags(snippet), score });
+    out.push({
+      title,
+      url: hit.url,
+      snippet: stripTags(snippet),
+      imageUrl: hit.imageUrl,
+      score,
+    });
   }
   return out
     .sort((a, b) => b.score - a.score)
@@ -297,7 +303,9 @@ function isUsefulProductImage(url: string, titleHint = ""): boolean {
   if (/logo|icon|sprite|avatar|pixel|tracking|1x1|favicon|react-assets|app-buttons/i.test(lower)) {
     return false;
   }
-  if (/facebook|twitter|instagram|payment|stripe|app-store|google-play/i.test(lower)) return false;
+  if (/facebook|twitter|instagram|payment|stripe|app-store|google-play|share-icons|previewdoh/i.test(lower)) {
+    return false;
+  }
   try {
     const host = new URL(url).hostname.toLowerCase();
     if (
@@ -425,15 +433,15 @@ export function parseGoogleSearchHtml(html: string, barcode: string): GoogleOrga
 
 /**
  * Signed Swisscows web search API — works on Render without Chrome.
- * Returns the same retail hits Google surfaces for many GTINs (Trendyol/Amazon style pages).
+ * Barcode-only hits often have dead thumbs; a title follow-up pulls Trendyol/shop CDNs.
  */
-export async function searchSwisscowsApi(barcode: string): Promise<GoogleOrganicHit[]> {
-  const digits = barcode.replace(/\D/g, "");
-  if (!digits) return [];
+async function swisscowsWebSearch(query: string): Promise<GoogleOrganicHit[]> {
+  const q = query.replace(/\s+/g, " ").trim();
+  if (q.length < 4) return [];
 
   const path = "/v5/web/search";
   const params = {
-    query: digits,
+    query: q,
     offset: 0,
     itemsCount: 10,
     locale: "tr-TR",
@@ -446,7 +454,7 @@ export async function searchSwisscowsApi(barcode: string): Promise<GoogleOrganic
   ).toString();
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const timer = setTimeout(() => controller.abort(), 7000);
   try {
     const response = await fetch(`https://api.swisscows.com${path}?${qs}`, {
       signal: controller.signal,
@@ -455,7 +463,7 @@ export async function searchSwisscowsApi(barcode: string): Promise<GoogleOrganic
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         Referer: "https://swisscows.com/",
-        "X-Referer": `https://swisscows.com/en/web?query=${digits}`,
+        "X-Referer": `https://swisscows.com/en/web?query=${encodeURIComponent(q)}`,
         "X-Request-Nonce": nonce,
         "X-Request-Signature": signature,
         "Cache-Control": "no-cache",
@@ -465,17 +473,15 @@ export async function searchSwisscowsApi(barcode: string): Promise<GoogleOrganic
     if (!response.ok) return [];
     const json = (await response.json().catch(() => null)) as { payload?: string } | null;
     if (!json?.payload) return [];
-    const decoded = decodeSwisscowsJwtPayload(json.payload);
-    const items = decoded?.items ?? [];
-    const raw: GoogleOrganicHit[] = items
+    const items = decodeSwisscowsJwtPayload(json.payload)?.items ?? [];
+    return items
       .filter((item) => item.type === "WebPage" || Boolean(item.name))
       .map((item) => ({
         title: stripTags(item.name ?? ""),
         url: item.url ?? "",
         snippet: stripTags(item.description ?? "").slice(0, 400),
-        imageUrl: item.thumbnail?.url,
+        imageUrl: usefulSwisscowsThumb(item.thumbnail?.url),
       }));
-    return rankHits(raw, digits);
   } catch (error) {
     console.error(
       "[barcode-web] swisscows-api",
@@ -487,6 +493,45 @@ export async function searchSwisscowsApi(barcode: string): Promise<GoogleOrganic
   }
 }
 
+function usefulSwisscowsThumb(url?: string): string | undefined {
+  if (!url || !/^https:\/\//i.test(url)) return undefined;
+  if (
+    /share-icons|favicon|sprite|logo|1x1|pixel|amazon\.png|previewdoh|placeholder/i.test(url)
+  ) {
+    return undefined;
+  }
+  return url;
+}
+
+function followUpQueryFromHit(hit: GoogleOrganicHit, barcode: string): string {
+  const brand = extractBrandFromSnippet(hit.snippet, hit.title);
+  const model = hit.title.match(/\bX\d{3,5}\b/i)?.[0] ?? "";
+  const cleaned = cleanTitle(hit.title)
+    .replace(/\bPrices,?\s*Features(?:\s+and\s+Reviews)?\b/gi, "")
+    .trim();
+  const compact = [brand, model].filter(Boolean).join(" ").trim();
+  if (compact.length >= 8) return compact;
+  if (cleaned.length >= 12) return cleaned.slice(0, 80);
+  return barcode;
+}
+
+export async function searchSwisscowsApi(barcode: string): Promise<GoogleOrganicHit[]> {
+  const digits = barcode.replace(/\D/g, "");
+  if (!digits) return [];
+
+  const first = await swisscowsWebSearch(digits);
+  let merged = [...first];
+  const seed = rankHits(first, digits)[0];
+  if (seed) {
+    const followUp = followUpQueryFromHit(seed, digits);
+    if (followUp && followUp !== digits) {
+      const second = await swisscowsWebSearch(followUp);
+      merged = [...merged, ...second];
+    }
+  }
+  return rankHits(merged, digits);
+}
+
 /**
  * Web search for retail GTINs. Prefers Swisscows signed API (no Chrome).
  * Brave/puppeteer remain optional fallbacks when headless is enabled.
@@ -495,7 +540,7 @@ export async function searchGoogleHeadless(barcode: string): Promise<GoogleOrgan
   const digits = barcode.replace(/\D/g, "");
   if (!digits) return [];
 
-  const apiHits = await withTimeout(searchSwisscowsApi(digits), 8500, "swisscows-api");
+  const apiHits = await withTimeout(searchSwisscowsApi(digits), 14_000, "swisscows-api");
   if (apiHits?.length) return apiHits;
 
   if (process.env.BARCODE_GOOGLE_HEADLESS === "0") return [];
@@ -528,9 +573,11 @@ function pickOgImage(html: string, pageUrl: string): string | null {
   }
 }
 
-async function fetchOgImage(pageUrl: string, timeoutMs = 7000): Promise<string | null> {
+async function fetchOgImage(pageUrl: string, timeoutMs = 4000): Promise<string | null> {
   if (!/^https:/i.test(pageUrl)) return null;
   if ((pageUrl.match(/\//g) || []).length <= 3) return null;
+  // Retail hosts that hang or 404 thumbs from datacenter IPs — skip.
+  if (/kozmetikara\.com/i.test(pageUrl)) return null;
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);

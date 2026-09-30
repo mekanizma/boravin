@@ -519,7 +519,12 @@ Emin değilsen bütün alanları boş string ve imageUrls boş dizi yap. Barkodd
     return draft;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gemini barkod sorgusu başarısız";
-    console.error("[barcode-gemini]", message);
+    // Access/model denials are expected on some keys — avoid noisy full stack spam.
+    if (/403|404|denied access|no longer available/i.test(message)) {
+      console.warn("[barcode-gemini]", message.slice(0, 160));
+    } else {
+      console.error("[barcode-gemini]", message);
+    }
     return null;
   }
 }
@@ -583,7 +588,7 @@ export async function lookupWebFallbacks(barcode: string): Promise<{
           return null;
         }),
     ]),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 11_000)),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 16_000)),
   ]);
 
   if (draft) {

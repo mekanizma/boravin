@@ -264,7 +264,7 @@ export async function lookupBarcodeExternal(barcode: string): Promise<ExternalLo
     Promise.race([
       webPromise,
       new Promise<{ draft: null; networkError: boolean }>((resolve) =>
-        setTimeout(() => resolve({ draft: null, networkError: true }), 12_000),
+        setTimeout(() => resolve({ draft: null, networkError: true }), 18_000),
       ),
     ]),
   ]);
