@@ -67,7 +67,7 @@ export function ProductPurchaseActions({
   const buyLabel = pending === "buy" ? t("redirecting") : t("buy");
 
   return (
-    <div className="mt-5 grid grid-cols-1 gap-2">
+    <div className="mt-4 grid grid-cols-1 gap-2">
       <button
         type="button"
         className="bv-glitch-buy"

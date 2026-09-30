@@ -1,9 +1,9 @@
-﻿import { asc } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { categories } from "@/lib/db/schema";
 import { AdminTable } from "@/components/admin/admin-table";
+import { NewCategoryButton } from "@/components/admin/admin-create-entities";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 async function loadRows() {
   try {
@@ -32,7 +32,9 @@ export default async function AdminCategoriesPage() {
           <h1 className="font-display text-2xl font-semibold">Kategoriler</h1>
           <p className="text-sm text-[var(--bv-muted)]">Hiyerarşi ve SEO</p>
         </div>
-        <Button variant="accent">Yeni kategori</Button>
+        <NewCategoryButton
+          parents={rows.map((r) => ({ id: r.id, name: r.name }))}
+        />
       </div>
       <AdminTable
         rows={rows}

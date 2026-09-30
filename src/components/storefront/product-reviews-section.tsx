@@ -47,10 +47,10 @@ export async function ProductReviewsSection({
       : 0;
 
   return (
-    <section className="mt-12 sm:mt-16">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-[var(--bv-border)] pb-3">
+    <section className="mt-10 sm:mt-12">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-[var(--bv-border)] pb-3">
         <div>
-          <h2 className="font-display text-2xl font-semibold">{t("title")}</h2>
+          <h2 className="font-display text-xl font-semibold sm:text-2xl">{t("title")}</h2>
           <p className="mt-1 text-sm text-[var(--bv-muted)]">
             {items.length
               ? t("summary", { count: items.length, avg: avg.toFixed(1) })
@@ -59,7 +59,7 @@ export async function ProductReviewsSection({
         </div>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)] lg:gap-6">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.65fr)] lg:gap-5">
         <div className="space-y-3">
           {items.length === 0 ? (
             <DetailCard className="p-5 sm:p-6">

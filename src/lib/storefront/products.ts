@@ -1,4 +1,5 @@
-import { asc, eq, ilike, and, sql, gte, lte } from "drizzle-orm";
+import { asc, eq, ilike, and, sql, gte, lte, inArray } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { brands, categories, productImages, products } from "@/lib/db/schema";
 import type { ProductCardData } from "@/components/storefront/product-card";
@@ -9,7 +10,7 @@ import {
   type CatalogSort,
 } from "@/lib/storefront/catalog-sort";
 
-export async function loadProductCards(opts?: {
+export type LoadProductCardsOpts = {
   limit?: number;
   categoryId?: string;
   categorySlug?: string;
@@ -20,23 +21,35 @@ export async function loadProductCards(opts?: {
   minPrice?: number;
   maxPrice?: number;
   sort?: CatalogSort | string;
-}): Promise<ProductCardData[]> {
+};
+
+async function loadProductCardsUncached(
+  opts?: LoadProductCardsOpts,
+): Promise<ProductCardData[]> {
   try {
     let categoryId = opts?.categoryId;
     let brandId = opts?.brandId;
 
+    const lookups: Promise<void>[] = [];
     if (opts?.categorySlug) {
-      const cat = await db.query.categories.findFirst({
-        where: eq(categories.slug, opts.categorySlug),
-      });
-      categoryId = cat?.id;
+      lookups.push(
+        db.query.categories
+          .findFirst({ where: eq(categories.slug, opts.categorySlug) })
+          .then((cat) => {
+            categoryId = cat?.id;
+          }),
+      );
     }
     if (opts?.brandSlug) {
-      const brand = await db.query.brands.findFirst({
-        where: eq(brands.slug, opts.brandSlug),
-      });
-      brandId = brand?.id;
+      lookups.push(
+        db.query.brands
+          .findFirst({ where: eq(brands.slug, opts.brandSlug) })
+          .then((brand) => {
+            brandId = brand?.id;
+          }),
+      );
     }
+    if (lookups.length) await Promise.all(lookups);
 
     const conditions = [eq(products.status, "active")];
     if (categoryId) conditions.push(eq(products.categoryId, categoryId));
@@ -72,9 +85,15 @@ export async function loadProductCards(opts?: {
 
     if (!rows.length) return [];
 
+    const productIds = rows.map((row) => row.id);
     const images = await db
-      .select()
+      .select({
+        productId: productImages.productId,
+        url: productImages.url,
+        sortOrder: productImages.sortOrder,
+      })
       .from(productImages)
+      .where(inArray(productImages.productId, productIds))
       .orderBy(asc(productImages.sortOrder));
 
     const byProduct = new Map<string, typeof images>();
@@ -103,6 +122,39 @@ export async function loadProductCards(opts?: {
   } catch {
     return [];
   }
+}
+
+function cacheKeyForProductCards(opts?: LoadProductCardsOpts) {
+  return JSON.stringify({
+    limit: opts?.limit ?? 48,
+    categoryId: opts?.categoryId ?? null,
+    categorySlug: opts?.categorySlug ?? null,
+    brandId: opts?.brandId ?? null,
+    brandSlug: opts?.brandSlug ?? null,
+    search: opts?.search ?? null,
+    featured: opts?.featured ?? false,
+    minPrice: opts?.minPrice ?? null,
+    maxPrice: opts?.maxPrice ?? null,
+    sort: opts?.sort ?? null,
+  });
+}
+
+const loadProductCardsCached = unstable_cache(
+  async (key: string) =>
+    loadProductCardsUncached(JSON.parse(key) as LoadProductCardsOpts),
+  ["product-cards"],
+  { revalidate: 60, tags: ["products", "product-cards"] },
+);
+
+export async function loadProductCards(
+  opts?: LoadProductCardsOpts,
+): Promise<ProductCardData[]> {
+  return loadProductCardsUncached(opts);
+}
+
+/** Cached catalog cards for storefront shells (homepage / listings warm path). */
+export function loadCachedProductCards(opts?: LoadProductCardsOpts) {
+  return loadProductCardsCached(cacheKeyForProductCards(opts));
 }
 
 export async function countActiveProducts() {

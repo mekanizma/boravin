@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { CartDrawer, type CartDrawerItem } from "@/components/storefront/cart-drawer";
 import { LanguageSwitcher } from "@/components/storefront/language-switcher";
 import { BrandLogo } from "@/components/brand-logo";
-import { getCart } from "@/features/cart/actions";
+import { getCart, getCartBadge } from "@/features/cart/actions";
 import { useFormatMoney } from "@/lib/i18n/format";
 import { useCategoryLabel } from "@/lib/storefront/use-category-label";
 import {
@@ -272,42 +272,49 @@ export function SiteHeader() {
 
   const navItems = STORE_CATEGORIES;
 
-  const refreshCart = React.useCallback(() => {
-    getCart()
-      .then((res) => {
-        const items = res.items ?? [];
-        const count = items.reduce((sum, item) => sum + item.quantity, 0);
-        const total = items.reduce(
-          (sum, item) => sum + Number(item.unitPrice) * item.quantity,
-          0,
-        );
-        setSummary({ count, total });
-        setCartItems(
-          items.map((item) => ({
-            id: item.id,
-            name: item.product?.name ?? tCommon("productFallback"),
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            imageUrl: item.product?.images?.[0]?.url ?? null,
-            href: item.product ? `/urun/${item.product.slug}` : "/sepet",
-          })),
-        );
-      })
+  const refreshCart = React.useCallback((full = false) => {
+    if (full) {
+      getCart()
+        .then((res) => {
+          const items = res.items ?? [];
+          const count = items.reduce((sum, item) => sum + item.quantity, 0);
+          const total = items.reduce(
+            (sum, item) => sum + Number(item.unitPrice) * item.quantity,
+            0,
+          );
+          setSummary({ count, total });
+          setCartItems(
+            items.map((item) => ({
+              id: item.id,
+              name: item.product?.name ?? tCommon("productFallback"),
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              imageUrl: item.product?.images?.[0]?.url ?? null,
+              href: item.product ? `/urun/${item.product.slug}` : "/sepet",
+            })),
+          );
+        })
+        .catch(() => {});
+      return;
+    }
+
+    getCartBadge()
+      .then((badge) => setSummary(badge))
       .catch(() => {});
   }, [tCommon]);
 
   React.useEffect(() => {
-    refreshCart();
+    refreshCart(false);
   }, [refreshCart]);
 
   React.useEffect(() => {
-    if (cartOpen) refreshCart();
+    if (cartOpen) refreshCart(true);
   }, [cartOpen, refreshCart]);
 
   React.useEffect(() => {
-    const onChange = () => refreshCart();
+    const onChange = () => refreshCart(true);
     const onOpen = () => {
-      refreshCart();
+      refreshCart(true);
       setCartOpen(true);
     };
     window.addEventListener("bv-cart-changed", onChange);

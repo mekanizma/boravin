@@ -101,7 +101,10 @@ export async function storeRemoteProductImage(rawUrl: string): Promise<string | 
   }
 }
 
-export async function storeUploadedProductImage(file: File): Promise<string | null> {
+export async function storeUploadedImage(
+  file: File,
+  folder = "general",
+): Promise<string | null> {
   if (!file.size || file.size > MAX_BYTES) return null;
   if (file.type === "image/svg+xml") return null;
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -111,7 +114,11 @@ export async function storeUploadedProductImage(file: File): Promise<string | nu
     filename: `upload${sniffed.ext}`,
     contentType: sniffed.contentType,
     body: Buffer.from(bytes),
-    folder: "products",
+    folder,
   });
   return stored.url;
+}
+
+export async function storeUploadedProductImage(file: File): Promise<string | null> {
+  return storeUploadedImage(file, "products");
 }

@@ -121,7 +121,8 @@ function createDb(): AppDatabase {
     globalForDb.boravinSql ??
     postgres(connectionString, {
       max: managedHost ? 8 : 10,
-      idle_timeout: 20,
+      idle_timeout: 60,
+      max_lifetime: 60 * 30,
       connect_timeout: 10,
       prepare: false,
       ssl,

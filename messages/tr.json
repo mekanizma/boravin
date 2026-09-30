@@ -105,7 +105,6 @@
     "corporateAbout": "Hakkımızda",
     "corporateKvkk": "KVKK",
     "corporatePrivacy": "Gizlilik",
-    "corporateAdmin": "Yönetim",
     "navAria": "Alt menü",
     "copyright": "© {year} Boravin Bilişim Ltd.",
     "location": "Girne, KKTC",
@@ -173,6 +172,7 @@
     "related": "Benzer ürünler",
     "allProducts": "Tüm ürünler",
     "infoTitle": "Ürün bilgisi",
+    "specsTitle": "Teknik özellikler",
     "noDescription": "Bu ürün için açıklama eklenmemiş.",
     "metaBrand": "Marka",
     "metaCategory": "Kategori",
@@ -184,6 +184,12 @@
     "addFavorite": "Favoriye ekle",
     "inFavorites": "Favorilerde",
     "galleryImageAria": "{index}. görsel",
+    "galleryZoomAria": "Görseli büyüt",
+    "galleryZoomHint": "Büyüt",
+    "galleryLightboxAria": "Ürün görselleri",
+    "galleryPrev": "Önceki görsel",
+    "galleryNext": "Sonraki görsel",
+    "galleryCounter": "{current} / {total}",
     "campaign": "Kampanya",
     "new": "Yeni",
     "addToCart": "Sepete ekle",
@@ -391,11 +397,43 @@
   },
   "Favorites": {
     "metadataTitle": "Favoriler",
+    "eyebrow": "Kayıtlı ürünler",
     "title": "Favoriler",
     "deviceNote": "Favoriler bu cihazda saklanır.",
-    "empty": "Henüz favori ürün yok.",
-    "discover": "Ürün keşfet",
-    "remove": "Favorilerden çıkar"
+    "countLabel": "{count} ürün listelendi · bu cihazda saklanır",
+    "empty": "Henüz favori ürün yok",
+    "emptyBody": "Beğendiğin ürünlerdeki kalp ikonuna dokun; buradan fiyatı takip edip hızlıca sepete ekleyebilirsin.",
+    "discover": "Ürünlere göz at",
+    "continueShopping": "Alışverişe devam",
+    "clearAll": "Listeyi temizle",
+    "clearedTitle": "Favoriler temizlendi",
+    "clearedBody": "Liste bu cihazdan silindi.",
+    "viewProduct": "İncele",
+    "remove": "Favorilerden çıkar",
+    "removeShort": "Çıkar",
+    "addToCart": "Sepete ekle",
+    "adding": "Ekleniyor…",
+    "compareShort": "Karşılaştır",
+    "compareSelectAria": "{name} ürününü karşılaştırmaya ekle",
+    "compareRemoveAria": "{name} ürününü karşılaştırmadan çıkar",
+    "compareSelected": "{count} ürün seçildi",
+    "compareHint": "En fazla {max} ürün karşılaştırabilirsin",
+    "compareClear": "Seçimi sil",
+    "compareAction": "Karşılaştır",
+    "compareTitle": "Ürün karşılaştırması",
+    "compareNeedTwo": "Karşılaştırmak için en az 2 ürün seç.",
+    "compareLimitTitle": "Limit doldu",
+    "compareLimitBody": "En fazla {max} ürün karşılaştırabilirsin.",
+    "compareBestPrice": "En uygun",
+    "compareProductsLabel": "Ürünler",
+    "compareRowListPrice": "Liste fiyatı",
+    "compareRowBrand": "Marka",
+    "compareRowCategory": "Kategori",
+    "compareRowStock": "Stok",
+    "compareRowSku": "SKU",
+    "compareRowName": "Ürün",
+    "compareRowPrice": "Fiyat",
+    "compareRowLink": "Detay"
   },
   "Contact": {
     "metadataTitle": "İletişim",
@@ -429,31 +467,31 @@
     "pages": {
       "hakkimizda": {
         "title": "Hakkımızda",
-        "body": "BORAVIN Hakkımızda içeriği admin panelinden düzenlenebilir."
+        "body": "Boravin Bilişim Ltd., 2003’ten beri Girne’de teknoloji satar."
       },
       "kvkk": {
         "title": "KVKK",
-        "body": "BORAVIN KVKK içeriği admin panelinden düzenlenebilir."
+        "body": "Veri sorumlusu Boravin Bilişim Ltd.’dir. Başvuru: info@boravin.com."
       },
       "gizlilik": {
         "title": "Gizlilik",
-        "body": "BORAVIN Gizlilik içeriği admin panelinden düzenlenebilir."
+        "body": "Sitede sepet, dil ve üyelik için zorunlu çerezler kullanılır."
       },
       "kullanim-sartlari": {
         "title": "Kullanım Şartları",
-        "body": "BORAVIN Kullanım Şartları içeriği admin panelinden düzenlenebilir."
+        "body": "Siteyi Boravin Bilişim Ltd. işletir. Fiyatlar TL’dir."
       },
       "iade": {
         "title": "İade Şartları",
-        "body": "BORAVIN İade Şartları içeriği admin panelinden düzenlenebilir."
+        "body": "Kullanılmamış ürünler teslimattan itibaren 14 gün içinde iade edilebilir."
       },
       "kargo": {
         "title": "Kargo",
-        "body": "BORAVIN Kargo içeriği admin panelinden düzenlenebilir."
+        "body": "KKTC içi teslimat. 5.000 TL ve üzeri alışverişlerde kargo ücretsizdir."
       },
       "sss": {
         "title": "SSS",
-        "body": "BORAVIN SSS içeriği admin panelinden düzenlenebilir."
+        "body": "Adres, mesai, kargo, iade ve servis sorularının yanıtları."
       }
     }
   },

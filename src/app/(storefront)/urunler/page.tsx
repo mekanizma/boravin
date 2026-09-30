@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { CatalogClient } from "@/components/storefront/catalog-client";
-import { loadProductCards } from "@/lib/storefront/products";
+import { loadCachedProductCards } from "@/lib/storefront/products";
 import { parseCatalogSort } from "@/lib/storefront/catalog-sort";
 import {
   mergeCatalogProducts,
@@ -28,7 +28,7 @@ export default async function UrunlerPage({
   const sp = await searchParams;
   const sort = parseCatalogSort(sp.sort);
   const products = mergeCatalogProducts(
-    await loadProductCards({
+    await loadCachedProductCards({
       search: sp.q,
       categorySlug: sp.category,
       brandSlug: sp.brand,

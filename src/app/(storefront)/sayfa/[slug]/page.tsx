@@ -5,21 +5,19 @@ import { pages } from "@/lib/db/schema";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ContactDetails } from "@/components/storefront/contact-details";
+import { getCmsPage } from "@/lib/storefront/cms-pages";
 
-const CMS_PAGE_SLUGS = [
-  "hakkimizda",
-  "kvkk",
-  "gizlilik",
-  "kullanim-sartlari",
-  "iade",
-  "kargo",
-  "sss",
-] as const;
-
-type CmsPageSlug = (typeof CMS_PAGE_SLUGS)[number];
-
-function isCmsPageSlug(slug: string): slug is CmsPageSlug {
-  return (CMS_PAGE_SLUGS as readonly string[]).includes(slug);
+function CmsArticle({ title, html }: { title: string; html: string }) {
+  return (
+    <article className="container-bv py-6 sm:py-10">
+      <div className="mx-auto max-w-3xl border border-[#e3e8ec] bg-white px-4 py-6 sm:px-8 sm:py-10">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-[#111] sm:text-4xl">
+          {title}
+        </h1>
+        <div className="cms-body mt-5" dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    </article>
+  );
 }
 
 export async function generateMetadata({
@@ -39,11 +37,12 @@ export async function generateMetadata({
       }),
     };
   }
-  const tCms = await getTranslations("Cms");
   const locale = await getLocale();
-  if (locale === "en" && isCmsPageSlug(slug)) {
-    return { title: tCms(`pages.${slug}.title`) };
+  const cms = getCmsPage(slug, locale);
+  if (cms) {
+    return { title: cms.seoTitle, description: cms.seoDescription };
   }
+  const tCms = await getTranslations("Cms");
   try {
     const page = await db.query.pages.findFirst({
       where: eq(pages.slug, slug),
@@ -67,6 +66,13 @@ export default async function CmsPage({
   if (slug === "iletisim") {
     return <ContactDetails />;
   }
+
+  const locale = await getLocale();
+  const cms = getCmsPage(slug, locale);
+  if (cms) {
+    return <CmsArticle title={cms.title} html={cms.html} />;
+  }
+
   let page = null;
   try {
     page = await db.query.pages.findFirst({
@@ -77,26 +83,5 @@ export default async function CmsPage({
   }
   if (!page || page.status !== "published") notFound();
 
-  const locale = await getLocale();
-  const tCms = await getTranslations("Cms");
-  const useLocalized =
-    locale === "en" &&
-    isCmsPageSlug(slug) &&
-    // Only override the seed placeholder body, not custom admin HTML.
-    (page.content ?? "").includes("admin panelinden düzenlenebilir");
-
-  const title = useLocalized ? tCms(`pages.${slug}.title`) : page.title;
-  const html = useLocalized
-    ? `<p>${tCms(`pages.${slug}.body`)}</p>`
-    : (page.content ?? "");
-
-  return (
-    <article className="container-bv prose prose-neutral max-w-3xl py-12">
-      <h1 className="font-display text-4xl font-bold">{title}</h1>
-      <div
-        className="mt-6 text-[var(--bv-slate)]"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    </article>
-  );
+  return <CmsArticle title={page.title} html={page.content ?? ""} />;
 }

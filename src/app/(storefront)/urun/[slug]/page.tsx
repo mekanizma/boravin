@@ -112,14 +112,14 @@ export default async function ProductDetailPage({
     const compare = mock.compareAtPrice ? Number(mock.compareAtPrice) : null;
     return (
       <div className="container-bv py-6 sm:py-10">
-        <nav className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--bv-muted)]">
+        <nav className="mb-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--bv-muted)] sm:mb-7">
           <Link href="/" className="hover:text-[var(--bv-ink)]">{t("breadcrumbHome")}</Link>
           <span aria-hidden>/</span>
           <Link href="/urunler" className="hover:text-[var(--bv-ink)]">{t("breadcrumbProducts")}</Link>
           <span aria-hidden>/</span>
           <span className="text-[var(--bv-ink)]">{mock.name}</span>
         </nav>
-        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)] lg:gap-14">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(19rem,0.8fr)] lg:gap-12 xl:gap-16">
           <ProductGallery
             images={
               mock.imageUrl
@@ -127,17 +127,17 @@ export default async function ProductDetailPage({
                 : []
             }
           />
-          <div>
+          <div className="min-w-0">
             {mock.brandName ? (
               <p className="text-xs font-semibold tracking-[0.16em] text-[var(--bv-muted)] uppercase">
                 {mock.brandName}
               </p>
             ) : null}
-            <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-[2.15rem] sm:leading-tight">
               {mock.name}
             </h1>
             <p className="mt-3 text-sm text-[var(--bv-slate)]">{t("previewBadge")}</p>
-            <DetailCard className="p-4 sm:p-6" stageClassName="mt-6">
+            <DetailCard className="p-4 sm:p-6" stageClassName="mt-5 sm:mt-6">
               {compare && compare > price ? (
                 <p className="text-sm text-[var(--bv-muted)] line-through">
                   {await formatMoneyServer(compare)}
@@ -158,8 +158,8 @@ export default async function ProductDetailPage({
           </div>
         </div>
         {related.length ? (
-          <section className="mt-14">
-            <h2 className="mb-4 font-display text-xl font-semibold">{t("related")}</h2>
+          <section className="mt-12 sm:mt-14">
+            <h2 className="mb-5 font-display text-xl font-semibold sm:text-2xl">{t("related")}</h2>
             <ProductGrid products={related} />
           </section>
         ) : null}
@@ -229,7 +229,7 @@ export default async function ProductDetailPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <nav className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--bv-muted)]">
+      <nav className="mb-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--bv-muted)] sm:mb-7">
         <Link href="/" className="hover:text-[var(--bv-ink)]">
           {t("breadcrumbHome")}
         </Link>
@@ -257,7 +257,7 @@ export default async function ProductDetailPage({
         </span>
       </nav>
 
-      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] lg:gap-20">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(19rem,0.8fr)] lg:gap-12 xl:gap-16">
         <ProductGallery
           images={images
             .map((image) => ({
@@ -268,29 +268,56 @@ export default async function ProductDetailPage({
             .filter((image) => Boolean(image.url))}
         />
 
-        <div className="lg:sticky lg:top-36">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            {product.brand ? (
-              <p className="text-xs font-semibold tracking-[0.16em] text-[var(--bv-muted)] uppercase">
-                {product.brand.name}
+        <div className="min-w-0 lg:sticky lg:top-28 lg:self-start">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {product.brand ? (
+                <p className="text-xs font-semibold tracking-[0.16em] text-[var(--bv-muted)] uppercase">
+                  {product.brand.name}
+                </p>
+              ) : null}
+              {product.isNew ? (
+                <span className="text-xs font-semibold text-[var(--bv-teal)]">
+                  {t("new")}
+                </span>
+              ) : null}
+              {product.isCampaign ? (
+                <span className="text-xs font-semibold text-[var(--bv-sale)]">
+                  {t("campaign")}
+                </span>
+              ) : null}
+            </div>
+
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-balance sm:text-[2.15rem] sm:leading-tight">
+              {product.name}
+            </h1>
+
+            <p className="text-xs text-[var(--bv-muted)] sm:text-sm">
+              {tCommon("skuLabel", { sku: product.sku })}
+              {product.category ? (
+                <>
+                  <span className="mx-1.5 text-[var(--bv-border-strong)]" aria-hidden>
+                    ·
+                  </span>
+                  <Link
+                    href={`/kategori/${product.category.slug}`}
+                    className="hover:text-[var(--bv-ink)]"
+                  >
+                    {translateCategoryName((key) => tc(key as never), {
+                      slug: product.category.slug,
+                      name: product.category.name,
+                    })}
+                  </Link>
+                </>
+              ) : null}
+            </p>
+
+            {product.shortDescription ? (
+              <p className="max-w-prose text-sm leading-relaxed text-[var(--bv-slate)]">
+                {product.shortDescription}
               </p>
             ) : null}
-            {product.isNew ? (
-              <span className="text-xs font-semibold text-[var(--bv-teal)]">{t("new")}</span>
-            ) : null}
-            {product.isCampaign ? (
-              <span className="text-xs font-semibold text-[var(--bv-sale)]">{t("campaign")}</span>
-            ) : null}
           </div>
-          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-            {product.name}
-          </h1>
-          <p className="mt-3 text-sm text-[var(--bv-muted)]">{tCommon("skuLabel", { sku: product.sku })}</p>
-          {product.shortDescription ? (
-            <p className="mt-4 max-w-prose text-sm leading-relaxed text-[var(--bv-slate)] sm:text-base">
-              {product.shortDescription}
-            </p>
-          ) : null}
 
           <ProductBuyPanel
             product={{
@@ -315,66 +342,42 @@ export default async function ProductDetailPage({
         </div>
       </div>
 
-      <section className="mt-12 sm:mt-16">
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.7fr)] lg:gap-6">
-          <DetailCard className="p-5 sm:p-7">
-            <h2 className="font-display text-2xl font-semibold">{t("infoTitle")}</h2>
-            {product.description ? (
-              <p className="mt-4 max-w-prose whitespace-pre-wrap text-sm leading-7 text-[var(--bv-slate)] sm:text-base">
-                {product.description}
-              </p>
-            ) : (
-              <p className="mt-4 text-sm text-[var(--bv-muted)]">
-                {t("noDescription")}
-              </p>
-            )}
-            {specEntries.length > 0 ? (
-              <dl className="mt-8 divide-y divide-[var(--bv-border)] border-y border-[var(--bv-border)]">
+      <section className="mt-10 sm:mt-14">
+        <DetailCard className="p-5 sm:p-7" stageClassName="px-0">
+          <h2 className="font-display text-xl font-semibold sm:text-2xl">
+            {t("infoTitle")}
+          </h2>
+          {product.description ? (
+            <p className="mt-4 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-[var(--bv-slate)] sm:text-base">
+              {product.description}
+            </p>
+          ) : (
+            <p className="mt-4 text-sm text-[var(--bv-muted)]">
+              {t("noDescription")}
+            </p>
+          )}
+
+          {specEntries.length > 0 ? (
+            <div className="mt-8 border-t border-[var(--bv-border)] pt-6">
+              <h3 className="text-sm font-semibold tracking-[0.08em] text-[var(--bv-muted)] uppercase">
+                {t("specsTitle")}
+              </h3>
+              <dl className="mt-4 grid gap-x-10 gap-y-0 sm:grid-cols-2">
                 {specEntries.map(([label, value]) => (
                   <div
                     key={label}
-                    className="grid grid-cols-1 gap-1 py-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-6"
+                    className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-3 border-b border-[var(--bv-border)] py-3 last:border-b-0 sm:last:border-b"
                   >
                     <dt className="text-sm text-[var(--bv-muted)]">{label}</dt>
-                    <dd className="text-sm font-medium text-[var(--bv-ink)]">{value}</dd>
+                    <dd className="text-sm font-medium text-[var(--bv-ink)]">
+                      {value}
+                    </dd>
                   </div>
                 ))}
               </dl>
-            ) : null}
-          </DetailCard>
-          <DetailCard className="h-fit p-2 sm:p-3">
-            <dl className="divide-y divide-[var(--bv-border)]">
-              {(
-                [
-                  [t("metaBrand"), product.brand?.name],
-                  [
-                    t("metaCategory"),
-                    product.category
-                      ? translateCategoryName((key) => tc(key as never), {
-                          slug: product.category.slug,
-                          name: product.category.name,
-                        })
-                      : undefined,
-                  ],
-                  [t("metaSku"), product.sku],
-                  [
-                    t("metaStock"),
-                    product.stock > 0
-                      ? tCommon("stockCount", { count: product.stock })
-                      : tCommon("outOfStock"),
-                  ],
-                ] as const
-              )
-                .filter((row) => Boolean(row[1]))
-                .map(([label, value]) => (
-                  <div key={label} className="flex items-baseline justify-between gap-4 px-3 py-3">
-                    <dt className="text-sm text-[var(--bv-muted)]">{label}</dt>
-                    <dd className="text-right text-sm font-semibold">{value}</dd>
-                  </div>
-                ))}
-            </dl>
-          </DetailCard>
-        </div>
+            </div>
+          ) : null}
+        </DetailCard>
       </section>
 
       <ProductReviewsSection
@@ -382,10 +385,15 @@ export default async function ProductDetailPage({
         defaultName={defaultReviewName || undefined}
       />
 
-      <section className="mt-14 sm:mt-16">
-        <div className="mb-6 flex items-end justify-between gap-4 border-b border-[var(--bv-border)] pb-3">
-          <h2 className="font-display text-2xl font-semibold">{t("related")}</h2>
-          <Link href="/urunler" className="text-sm font-medium text-[var(--bv-teal)]">
+      <section className="mt-12 sm:mt-14">
+        <div className="mb-5 flex items-end justify-between gap-4 border-b border-[var(--bv-border)] pb-3">
+          <h2 className="font-display text-xl font-semibold sm:text-2xl">
+            {t("related")}
+          </h2>
+          <Link
+            href="/urunler"
+            className="shrink-0 text-sm font-medium text-[var(--bv-teal)]"
+          >
             {t("allProducts")}
           </Link>
         </div>

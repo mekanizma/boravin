@@ -46,7 +46,7 @@ export function ProductBuyPanel({
     : null;
 
   return (
-    <DetailCard className="p-3.5 sm:p-4" stageClassName="mt-4">
+    <DetailCard className="p-3.5 sm:p-4" stageClassName="mt-5 sm:mt-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="bv-float">
           {compare ? (
@@ -65,7 +65,7 @@ export function ProductBuyPanel({
         ) : null}
       </div>
 
-      <p className="mt-2.5 text-sm text-[var(--bv-slate)]">
+      <p className="mt-2 text-sm text-[var(--bv-slate)]">
         {available > 0
           ? available <= 8
             ? tCommon("inStockLast", { count: available })
@@ -77,7 +77,7 @@ export function ProductBuyPanel({
       </p>
 
       {activeVariants.length > 0 ? (
-        <div className="mt-4">
+        <div className="mt-3.5">
           <p className="text-xs font-semibold tracking-[0.14em] text-[var(--bv-muted)] uppercase">
             {t("option")}
           </p>

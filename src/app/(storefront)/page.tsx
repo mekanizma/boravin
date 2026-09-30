@@ -1,4 +1,5 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, and, eq, inArray } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import {
   homepageSectionItems,
@@ -12,22 +13,24 @@ import {
   type HomepageSection,
 } from "@/components/storefront/homepage-sections";
 import type { ProductCardData } from "@/components/storefront/product-card";
-import { loadProductCards } from "@/lib/storefront/products";
+import { publicImageUrl } from "@/lib/media/url";
+import { loadCachedProductCards } from "@/lib/storefront/products";
 
-async function loadHomepageSections(): Promise<HomepageSection[] | null> {
+async function loadHomepageSectionsUncached(): Promise<HomepageSection[] | null> {
   try {
-    const sections = await db
-      .select()
-      .from(homepageSections)
-      .where(eq(homepageSections.status, "published"))
-      .orderBy(asc(homepageSections.sortOrder));
+    const [sections, items] = await Promise.all([
+      db
+        .select()
+        .from(homepageSections)
+        .where(eq(homepageSections.status, "published"))
+        .orderBy(asc(homepageSections.sortOrder)),
+      db
+        .select()
+        .from(homepageSectionItems)
+        .orderBy(asc(homepageSectionItems.sortOrder)),
+    ]);
 
     if (!sections.length) return [];
-
-    const items = await db
-      .select()
-      .from(homepageSectionItems)
-      .orderBy(asc(homepageSectionItems.sortOrder));
 
     const productIds = [
       ...new Set(
@@ -39,21 +42,33 @@ async function loadHomepageSections(): Promise<HomepageSection[] | null> {
 
     let productMap = new Map<string, ProductCardData>();
     if (productIds.length) {
-      const rows = await db
-        .select({
-          id: products.id,
-          name: products.name,
-          slug: products.slug,
-          price: products.price,
-          compareAtPrice: products.compareAtPrice,
-          isNew: products.isNew,
-          isCampaign: products.isCampaign,
-          isFeatured: products.isFeatured,
-        })
-        .from(products)
-        .where(eq(products.status, "active"));
+      const [rows, images] = await Promise.all([
+        db
+          .select({
+            id: products.id,
+            name: products.name,
+            slug: products.slug,
+            price: products.price,
+            compareAtPrice: products.compareAtPrice,
+            isNew: products.isNew,
+            isCampaign: products.isCampaign,
+            isFeatured: products.isFeatured,
+          })
+          .from(products)
+          .where(
+            and(eq(products.status, "active"), inArray(products.id, productIds)),
+          ),
+        db
+          .select({
+            productId: productImages.productId,
+            url: productImages.url,
+            sortOrder: productImages.sortOrder,
+          })
+          .from(productImages)
+          .where(inArray(productImages.productId, productIds))
+          .orderBy(asc(productImages.sortOrder)),
+      ]);
 
-      const images = await db.select().from(productImages);
       const byProduct = new Map<string, typeof images>();
       for (const img of images) {
         const list = byProduct.get(img.productId) ?? [];
@@ -62,26 +77,22 @@ async function loadHomepageSections(): Promise<HomepageSection[] | null> {
       }
 
       productMap = new Map(
-        rows
-          .filter((p) => productIds.includes(p.id))
-          .map((p) => {
-            const imgs = (byProduct.get(p.id) ?? []).sort(
-              (a, b) => a.sortOrder - b.sortOrder,
-            );
-            const card: ProductCardData = {
-              id: p.id,
-              name: p.name,
-              slug: p.slug,
-              price: p.price,
-              compareAtPrice: p.compareAtPrice,
-              isNew: p.isNew,
-              isCampaign: p.isCampaign,
-              isFeatured: p.isFeatured,
-              imageUrl: imgs[0]?.url ?? null,
-              hoverImageUrl: imgs[1]?.url ?? null,
-            };
-            return [p.id, card] as const;
-          }),
+        rows.map((p) => {
+          const imgs = byProduct.get(p.id) ?? [];
+          const card: ProductCardData = {
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            price: p.price,
+            compareAtPrice: p.compareAtPrice,
+            isNew: p.isNew,
+            isCampaign: p.isCampaign,
+            isFeatured: p.isFeatured,
+            imageUrl: publicImageUrl(imgs[0]?.url ?? null),
+            hoverImageUrl: publicImageUrl(imgs[1]?.url ?? null),
+          };
+          return [p.id, card] as const;
+        }),
       );
     }
 
@@ -95,6 +106,7 @@ async function loadHomepageSections(): Promise<HomepageSection[] | null> {
           imageUrl: i.imageUrl,
           linkUrl: i.linkUrl,
           buttonLabel: i.buttonLabel,
+          meta: i.meta,
           product: i.productId ? (productMap.get(i.productId) ?? null) : null,
         }));
 
@@ -115,27 +127,31 @@ async function loadHomepageSections(): Promise<HomepageSection[] | null> {
   }
 }
 
+const loadHomepageSections = unstable_cache(
+  loadHomepageSectionsUncached,
+  ["homepage-sections-v3"],
+  { revalidate: 60, tags: ["homepage", "products"] },
+);
+
 export default async function HomePage() {
-  const [sections, featuredCards] = await Promise.all([
-    loadHomepageSections(),
-    loadProductCards({ featured: true, limit: 8 }),
-  ]);
-
-  const featured =
-    featuredCards[0] ??
-    (await loadProductCards({ limit: 1 }))[0] ??
-    null;
-
-  const grid =
-    featuredCards.length >= 4
-      ? featuredCards
-      : await loadProductCards({ limit: 8 });
+  const sections = await loadHomepageSections();
 
   if (sections === null || sections.length === 0) {
+    const featuredCards = await loadCachedProductCards({
+      featured: true,
+      limit: 8,
+    });
+    const featured =
+      featuredCards[0] ??
+      (await loadCachedProductCards({ limit: 1 }))[0] ??
+      null;
+    const grid =
+      featuredCards.length >= 4
+        ? featuredCards
+        : await loadCachedProductCards({ limit: 8 });
+
     return <FallbackHero featured={featured} products={grid} />;
   }
 
-  return (
-    <HomepageSections sections={sections} featuredProduct={featured} />
-  );
+  return <HomepageSections sections={sections} />;
 }

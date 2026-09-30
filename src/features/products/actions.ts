@@ -1,7 +1,7 @@
 "use server";
 
 import { and, asc, desc, eq, gte, ilike, lte, or, sql, inArray } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
@@ -149,6 +149,84 @@ export async function getProductBySlug(slug: string) {
   });
 }
 
+export type CompareProduct = {
+  id: string;
+  name: string;
+  slug: string;
+  sku: string;
+  price: number;
+  compareAtPrice: number | null;
+  stock: number;
+  brandName: string | null;
+  categoryName: string | null;
+  imageUrl: string | null;
+  shortDescription: string | null;
+};
+
+export async function getProductsForCompare(
+  ids: string[],
+): Promise<CompareProduct[]> {
+  const unique = [...new Set(ids.filter(Boolean))].slice(0, 4);
+  if (!unique.length) return [];
+
+  try {
+    const rows = await db
+      .select({
+        id: products.id,
+        name: products.name,
+        slug: products.slug,
+        sku: products.sku,
+        price: products.price,
+        compareAtPrice: products.compareAtPrice,
+        stock: products.stock,
+        shortDescription: products.shortDescription,
+        brandName: brands.name,
+        categoryName: categories.name,
+        imageUrl: productImages.url,
+        isPrimary: productImages.isPrimary,
+        sortOrder: productImages.sortOrder,
+      })
+      .from(products)
+      .leftJoin(brands, eq(products.brandId, brands.id))
+      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .leftJoin(productImages, eq(productImages.productId, products.id))
+      .where(inArray(products.id, unique));
+
+    const byId = new Map<string, CompareProduct>();
+    for (const row of rows) {
+      const existing = byId.get(row.id);
+      const imageCandidate = row.imageUrl;
+      if (!existing) {
+        byId.set(row.id, {
+          id: row.id,
+          name: row.name,
+          slug: row.slug,
+          sku: row.sku,
+          price: Number(row.price),
+          compareAtPrice: row.compareAtPrice ? Number(row.compareAtPrice) : null,
+          stock: row.stock,
+          brandName: row.brandName ?? null,
+          categoryName: row.categoryName ?? null,
+          imageUrl: imageCandidate,
+          shortDescription: row.shortDescription ?? null,
+        });
+        continue;
+      }
+      if (!existing.imageUrl && imageCandidate) {
+        existing.imageUrl = imageCandidate;
+      } else if (imageCandidate && row.isPrimary) {
+        existing.imageUrl = imageCandidate;
+      }
+    }
+
+    return unique
+      .map((id) => byId.get(id))
+      .filter((row): row is CompareProduct => Boolean(row));
+  } catch {
+    return [];
+  }
+}
+
 export async function createProduct(input: z.infer<typeof productInputSchema>) {
   const session = await requirePermission("PRODUCT_CREATE");
   const data = productInputSchema.parse(input);
@@ -206,6 +284,10 @@ export async function createProduct(input: z.infer<typeof productInputSchema>) {
   revalidatePath("/admin/products");
   revalidatePath("/admin/stock");
   revalidatePath("/urunler");
+  revalidateTag("products", "max");
+  revalidateTag("product-cards", "max");
+  revalidateTag("homepage", "max");
+  revalidatePath("/");
   return created;
 }
 
@@ -282,6 +364,10 @@ export async function updateProduct(
   revalidatePath("/admin/products");
   revalidatePath("/admin/stock");
   revalidatePath(`/urun/${updated.slug}`);
+  revalidateTag("products", "max");
+  revalidateTag("product-cards", "max");
+  revalidateTag("homepage", "max");
+  revalidatePath("/");
   return updated;
 }
 
@@ -318,6 +404,10 @@ export async function deleteProduct(id: string) {
   revalidatePath("/admin/stock");
   revalidatePath("/urunler");
   revalidatePath(`/urun/${before.slug}`);
+  revalidateTag("products", "max");
+  revalidateTag("product-cards", "max");
+  revalidateTag("homepage", "max");
+  revalidatePath("/");
   return { ok: true as const };
 }
 
@@ -390,6 +480,10 @@ export async function bulkUpdateProducts(input: {
 
   revalidatePath("/admin/products");
   revalidatePath("/urunler");
+  revalidateTag("products", "max");
+  revalidateTag("product-cards", "max");
+  revalidateTag("homepage", "max");
+  revalidatePath("/");
   return { updated: input.ids.length };
 }
 

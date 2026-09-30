@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { ProductGrid } from "@/components/storefront/product-grid";
 import type { ProductCardData } from "@/components/storefront/product-card";
-import { HeroSlider } from "@/components/storefront/hero-slider";
+import { HeroSlider, type HeroSliderSlide } from "@/components/storefront/hero-slider";
 import {
   MOCK_BRANDS,
   MOCK_CATEGORIES,
@@ -25,6 +25,7 @@ export type HomepageSectionItem = {
   linkUrl?: string | null;
   buttonLabel?: string | null;
   product?: ProductCardData | null;
+  meta?: Record<string, unknown> | null;
 };
 
 export type HomepageSection = {
@@ -328,6 +329,26 @@ function productsFromSection(section: HomepageSection): ProductCardData[] {
   );
 }
 
+function heroSlidesFromSection(section?: HomepageSection): HeroSliderSlide[] {
+  if (!section?.items?.length) return [];
+  return section.items
+    .filter((item) => item.imageUrl)
+    .map((item) => {
+      const eyebrow =
+        typeof item.meta?.eyebrow === "string" ? item.meta.eyebrow.trim() : "";
+      return {
+        id: item.id,
+        eyebrow,
+        title: item.title?.trim() || "",
+        body: item.subtitle?.trim() || "",
+        imageUrl: item.imageUrl || "",
+        linkUrl: item.linkUrl?.trim() || "",
+        buttonLabel: item.buttonLabel || undefined,
+      };
+    })
+    .filter((slide) => slide.imageUrl);
+}
+
 function poolFrom(
   sections: HomepageSection[],
   featured?: ProductCardData | null,
@@ -354,6 +375,7 @@ export async function HomepageSections({
 }) {
   const t = await getTranslations("Home");
   const locale = await getStorefrontLocale();
+  const hero = sections.find((section) => section.type === "hero");
   const categories = sections.find((section) => section.type === "categories");
   const brands = sections.find((section) => section.type === "brands");
   const newsletter = sections.find((section) => section.type === "newsletter");
@@ -365,10 +387,11 @@ export async function HomepageSections({
     ? productsFromSection(productSections[0])
     : pool;
   const second = productSections[1] ? productsFromSection(productSections[1]) : pool.slice(4);
+  const heroSlides = heroSlidesFromSection(hero);
 
   return (
     <>
-      <HeroSlider />
+      <HeroSlider slides={heroSlides} />
       <PopularCategories section={categories} />
       <Showcase
         title={localizeHomeCopy(
@@ -410,15 +433,17 @@ export async function HomepageSections({
 export async function FallbackHero({
   featured,
   products = [],
+  heroSlides = [],
 }: {
   featured?: ProductCardData | null;
   products?: ProductCardData[];
+  heroSlides?: HeroSliderSlide[];
 }) {
   const t = await getTranslations("Home");
   const pool = poolFrom([], featured, products);
   return (
     <>
-      <HeroSlider />
+      <HeroSlider slides={heroSlides} />
       <PopularCategories />
       <Showcase
         title={t("featuredTitle")}

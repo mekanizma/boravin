@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { CatalogClient } from "@/components/storefront/catalog-client";
-import { loadProductCards } from "@/lib/storefront/products";
+import { loadCachedProductCards } from "@/lib/storefront/products";
 import { db } from "@/lib/db";
 import { brands } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -26,7 +26,11 @@ export default async function BrandPage({
   } catch {
     // ignore
   }
-  const products = await loadProductCards({ brandSlug: slug, sort, limit: 48 });
+  const products = await loadCachedProductCards({
+    brandSlug: slug,
+    sort,
+    limit: 48,
+  });
   return (
     <CatalogClient products={products} title={title} subtitle={t("brandSubtitle")} />
   );

@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { CatalogClient } from "@/components/storefront/catalog-client";
-import { loadProductCards } from "@/lib/storefront/products";
+import { loadCachedProductCards } from "@/lib/storefront/products";
 import { findCategory } from "@/lib/storefront/catalog";
 import { db } from "@/lib/db";
 import { categories } from "@/lib/db/schema";
@@ -40,7 +40,7 @@ export default async function CategoryPage({
       // ignore
     }
   }
-  const products = await loadProductCards({
+  const products = await loadCachedProductCards({
     categorySlug: last,
     sort,
     limit: 48,

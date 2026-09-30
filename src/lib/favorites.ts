@@ -32,3 +32,8 @@ export function toggleFavorite(item: FavoriteItem) {
   window.localStorage.setItem(KEY, JSON.stringify(next));
   return !exists;
 }
+
+export function clearFavorites() {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(KEY, JSON.stringify([]));
+}

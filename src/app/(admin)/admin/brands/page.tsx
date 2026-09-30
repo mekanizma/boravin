@@ -1,9 +1,9 @@
-﻿import { asc } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { brands } from "@/lib/db/schema";
 import { AdminTable } from "@/components/admin/admin-table";
+import { NewBrandButton } from "@/components/admin/admin-create-entities";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 async function loadRows() {
   try {
@@ -31,7 +31,7 @@ export default async function AdminBrandsPage() {
           <h1 className="font-display text-2xl font-semibold">Markalar</h1>
           <p className="text-sm text-[var(--bv-muted)]">Marka kataloğu</p>
         </div>
-        <Button variant="accent">Yeni marka</Button>
+        <NewBrandButton />
       </div>
       <AdminTable
         rows={rows}

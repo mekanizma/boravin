@@ -32,7 +32,6 @@ export async function SiteFooter() {
         { href: "/sayfa/hakkimizda", label: t("corporateAbout") },
         { href: "/sayfa/kvkk", label: t("corporateKvkk") },
         { href: "/sayfa/gizlilik", label: t("corporatePrivacy") },
-        { href: "/admin", label: t("corporateAdmin") },
       ],
     },
   ];

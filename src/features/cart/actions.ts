@@ -48,13 +48,29 @@ async function getOrCreateCartId() {
   return cart;
 }
 
+/** Read-only cart lookup — never creates rows (header / badge path). */
+async function findCartByCookie() {
+  const jar = await cookies();
+  const sessionId = jar.get(CART_COOKIE)?.value;
+  if (!sessionId) return null;
+  return (
+    (await db.query.carts.findFirst({
+      where: eq(carts.sessionId, sessionId),
+    })) ?? null
+  );
+}
+
 export type EnrichedCartItem = Awaited<
   ReturnType<typeof getCart>
 >["items"][number];
 
 export async function getCart() {
   try {
-    const cart = await getOrCreateCartId();
+    const cart = await findCartByCookie();
+    if (!cart) {
+      return { cart: null, items: [] as const };
+    }
+
     const items = await db
       .select()
       .from(cartItems)
@@ -122,6 +138,41 @@ export async function getCart() {
     return { cart, items: enriched };
   } catch {
     return { cart: null, items: [] };
+  }
+}
+
+/** Lightweight badge totals for the header — skips product/image joins. */
+export async function getCartBadge() {
+  try {
+    const jar = await cookies();
+    const sessionId = jar.get(CART_COOKIE)?.value;
+    if (!sessionId) return { count: 0, total: 0 };
+
+    // Single round-trip: empty carts still return one row with null quantities.
+    const rows = await db
+      .select({
+        quantity: cartItems.quantity,
+        unitPrice: cartItems.unitPrice,
+      })
+      .from(carts)
+      .leftJoin(cartItems, eq(cartItems.cartId, carts.id))
+      .where(eq(carts.sessionId, sessionId));
+
+    if (!rows.length) return { count: 0, total: 0 };
+
+    return {
+      count: rows.reduce((sum, item) => sum + (item.quantity ?? 0), 0),
+      total: rows.reduce(
+        (sum, item) =>
+          sum +
+          (item.quantity && item.unitPrice
+            ? Number(item.unitPrice) * item.quantity
+            : 0),
+        0,
+      ),
+    };
+  } catch {
+    return { count: 0, total: 0 };
   }
 }
 

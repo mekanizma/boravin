@@ -6,116 +6,182 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-const SLIDE_META = [
-  {
-    href: "/urunler",
-    image:
-      "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=1600&h=900&q=80",
-    keys: { eyebrow: "slide0Eyebrow", title: "slide0Title", body: "slide0Body" },
-  },
-  {
-    href: "/kategori/bilgisayar",
-    image:
-      "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1600&h=900&q=80",
-    keys: { eyebrow: "slide1Eyebrow", title: "slide1Title", body: "slide1Body" },
-  },
-  {
-    href: "/kampanya/yaz-teknoloji",
-    image:
-      "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1600&h=900&q=80",
-    keys: { eyebrow: "slide2Eyebrow", title: "slide2Title", body: "slide2Body" },
-  },
-] as const;
+export type HeroSliderSlide = {
+  id?: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+  imageUrl: string;
+  linkUrl: string;
+  buttonLabel?: string;
+};
 
-export function HeroSlider() {
+const FALLBACK_SLIDES: HeroSliderSlide[] = [
+  {
+    id: "fallback-0",
+    eyebrow: "",
+    title: "",
+    body: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=1600&h=900&q=80",
+    linkUrl: "/urunler",
+  },
+  {
+    id: "fallback-1",
+    eyebrow: "",
+    title: "",
+    body: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1600&h=900&q=80",
+    linkUrl: "/kategori/bilgisayar",
+  },
+  {
+    id: "fallback-2",
+    eyebrow: "",
+    title: "",
+    body: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1600&h=900&q=80",
+    linkUrl: "/kampanya/yaz-teknoloji",
+  },
+];
+
+export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
   const t = useTranslations("Home");
   const [index, setIndex] = React.useState(0);
   const [paused, setPaused] = React.useState(false);
 
+  const resolved = React.useMemo(() => {
+    const fromCms = (slides ?? []).filter((slide) => slide.imageUrl);
+    if (fromCms.length) return fromCms;
+
+    return FALLBACK_SLIDES.map((slide, i) => ({
+      ...slide,
+      eyebrow: t(`slide${i}Eyebrow` as "slide0Eyebrow"),
+      title: t(`slide${i}Title` as "slide0Title"),
+      body: t(`slide${i}Body` as "slide0Body"),
+      buttonLabel: t("heroCta"),
+    }));
+  }, [slides, t]);
+
   React.useEffect(() => {
-    if (paused) return;
+    setIndex(0);
+  }, [resolved.length]);
+
+  React.useEffect(() => {
+    if (paused || resolved.length <= 1) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const id = window.setInterval(() => {
-      setIndex((current) => (current + 1) % SLIDE_META.length);
+      setIndex((current) => (current + 1) % resolved.length);
     }, 5500);
     return () => window.clearInterval(id);
-  }, [paused]);
+  }, [paused, resolved.length]);
 
-  const meta = SLIDE_META[index];
-  const eyebrow = t(meta.keys.eyebrow);
-  const title = t(meta.keys.title);
-  const body = t(meta.keys.body);
+  const meta = resolved[index] ?? resolved[0];
+  if (!meta) return null;
+
+  const eyebrow = meta.eyebrow?.trim() || "";
+  const title = meta.title?.trim() || "";
+  const body = meta.body?.trim() || "";
+  const linkUrl = meta.linkUrl?.trim() || "";
+  const hasCopy = Boolean(eyebrow || title || body);
+  const hasLink = Boolean(linkUrl);
+  const ctaLabel = meta.buttonLabel?.trim() || t("heroCta");
 
   function go(next: number) {
-    setIndex((next + SLIDE_META.length) % SLIDE_META.length);
+    setIndex((next + resolved.length) % resolved.length);
   }
 
   return (
     <section
-      className="bg-white"
+      className="bv-hero-band relative overflow-hidden"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <div className="container-bv py-4 sm:py-5">
+      <div className="bv-hero-band__glow" aria-hidden />
+      <div className="bv-hero-band__grid" aria-hidden />
+      <div className="container-bv relative py-5 sm:py-7">
         <div className="bv-hero-slab bv-stage relative overflow-hidden rounded-[1.25rem] bg-[#121417] text-white">
-          <div className="relative min-h-[22rem] sm:min-h-[24rem] lg:min-h-[26rem]">
+          <div className="relative aspect-[16/10] w-full sm:aspect-[2/1] lg:aspect-[21/9]">
             <Image
-              key={meta.image}
-              src={meta.image}
-              alt=""
+              key={meta.imageUrl}
+              src={meta.imageUrl}
+              alt={title || eyebrow || ""}
               fill
               priority={index === 0}
+              unoptimized
               sizes="(max-width: 1280px) 100vw, 1200px"
-              className="object-cover opacity-55"
+              className="object-contain object-center"
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/75 to-black/20" />
-            <div className="relative flex min-h-[22rem] flex-col justify-end p-5 sm:min-h-[24rem] sm:p-8 lg:min-h-[26rem] lg:max-w-[38rem] lg:justify-center lg:p-12">
-              <p className="text-[12px] font-bold tracking-[0.16em] text-[var(--bv-sale)] uppercase">
-                {eyebrow}
-              </p>
-              <h1 className="mt-2 text-[1.7rem] leading-[1.05] font-bold tracking-tight sm:text-4xl lg:text-5xl">
-                {title}
-              </h1>
-              <p className="mt-3 max-w-md text-sm leading-relaxed text-white/80 sm:text-base">
-                {body}
-              </p>
+            {hasCopy ? (
+              <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col justify-end p-5 sm:p-8 lg:max-w-[38rem] lg:justify-center lg:p-12">
+                {eyebrow ? (
+                  <p className="text-[12px] font-bold tracking-[0.16em] text-[var(--bv-sale)] uppercase [text-shadow:0_1px_10px_rgba(0,0,0,0.7)]">
+                    {eyebrow}
+                  </p>
+                ) : null}
+                {title ? (
+                  <h1 className="mt-2 text-[1.7rem] leading-[1.05] font-bold tracking-tight [text-shadow:0_2px_16px_rgba(0,0,0,0.75)] sm:text-4xl lg:text-5xl">
+                    {title}
+                  </h1>
+                ) : null}
+                {body ? (
+                  <p className="mt-3 max-w-md text-sm leading-relaxed text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.7)] sm:text-base">
+                    {body}
+                  </p>
+                ) : null}
+                {hasLink ? (
+                  <Link
+                    href={linkUrl}
+                    className="bv-key bv-key-sea pointer-events-auto mt-6 inline-flex h-11 w-fit items-center rounded-xl bg-[var(--bv-teal)] px-5 text-sm font-semibold text-white"
+                  >
+                    {ctaLabel}
+                  </Link>
+                ) : null}
+              </div>
+            ) : hasLink ? (
               <Link
-                href={meta.href}
-                className="bv-key bv-key-sea mt-6 inline-flex h-11 w-fit items-center rounded-xl bg-[var(--bv-teal)] px-5 text-sm font-semibold text-white"
-              >
-                {t("heroCta")}
-              </Link>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="absolute top-1/2 left-3 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-black sm:inline-flex"
-            aria-label={t("prevSlide")}
-            onClick={() => go(index - 1)}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            className="absolute top-1/2 right-3 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-black sm:inline-flex"
-            aria-label={t("nextSlide")}
-            onClick={() => go(index + 1)}
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-            {SLIDE_META.map((item, i) => (
-              <button
-                key={item.keys.eyebrow}
-                type="button"
-                aria-label={t("slideDot", { eyebrow: t(item.keys.eyebrow) })}
-                onClick={() => setIndex(i)}
-                className={`h-1.5 rounded-full ${i === index ? "w-6 bg-white" : "w-1.5 bg-white/50"}`}
+                href={linkUrl}
+                className="absolute inset-0 z-[1]"
+                aria-label={ctaLabel}
               />
-            ))}
+            ) : null}
           </div>
+
+          {resolved.length > 1 ? (
+            <>
+              <button
+                type="button"
+                className="absolute top-1/2 left-3 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-black sm:inline-flex"
+                aria-label={t("prevSlide")}
+                onClick={() => go(index - 1)}
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                className="absolute top-1/2 right-3 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-black sm:inline-flex"
+                aria-label={t("nextSlide")}
+                onClick={() => go(index + 1)}
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+
+              <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+                {resolved.map((item, i) => (
+                  <button
+                    key={item.id ?? `${item.imageUrl}-${i}`}
+                    type="button"
+                    aria-label={t("slideDot", {
+                      eyebrow: item.eyebrow || item.title || String(i + 1),
+                    })}
+                    onClick={() => setIndex(i)}
+                    className={`h-1.5 rounded-full ${i === index ? "w-6 bg-white" : "w-1.5 bg-white/50"}`}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
         </div>
       </div>
     </section>

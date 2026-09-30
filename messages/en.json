@@ -105,7 +105,6 @@
     "corporateAbout": "About us",
     "corporateKvkk": "KVKK",
     "corporatePrivacy": "Privacy",
-    "corporateAdmin": "Admin",
     "navAria": "Footer menu",
     "copyright": "© {year} Boravin Bilişim Ltd.",
     "location": "Kyrenia, TRNC",
@@ -173,6 +172,7 @@
     "related": "Related products",
     "allProducts": "All products",
     "infoTitle": "Product info",
+    "specsTitle": "Specifications",
     "noDescription": "No description has been added for this product.",
     "metaBrand": "Brand",
     "metaCategory": "Category",
@@ -184,6 +184,12 @@
     "addFavorite": "Add to favorites",
     "inFavorites": "In favorites",
     "galleryImageAria": "Image {index}",
+    "galleryZoomAria": "Enlarge image",
+    "galleryZoomHint": "Zoom",
+    "galleryLightboxAria": "Product images",
+    "galleryPrev": "Previous image",
+    "galleryNext": "Next image",
+    "galleryCounter": "{current} / {total}",
     "campaign": "Sale",
     "new": "New",
     "addToCart": "Add to cart",
@@ -391,11 +397,43 @@
   },
   "Favorites": {
     "metadataTitle": "Favorites",
+    "eyebrow": "Saved products",
     "title": "Favorites",
     "deviceNote": "Favorites are stored on this device.",
-    "empty": "No favorite products yet.",
-    "discover": "Discover products",
-    "remove": "Remove from favorites"
+    "countLabel": "{count} products listed · stored on this device",
+    "empty": "No favorite products yet",
+    "emptyBody": "Tap the heart on products you like. Track prices here and add them to cart quickly.",
+    "discover": "Browse products",
+    "continueShopping": "Continue shopping",
+    "clearAll": "Clear list",
+    "clearedTitle": "Favorites cleared",
+    "clearedBody": "The list was removed from this device.",
+    "viewProduct": "View",
+    "remove": "Remove from favorites",
+    "removeShort": "Remove",
+    "addToCart": "Add to cart",
+    "adding": "Adding…",
+    "compareShort": "Compare",
+    "compareSelectAria": "Add {name} to comparison",
+    "compareRemoveAria": "Remove {name} from comparison",
+    "compareSelected": "{count} products selected",
+    "compareHint": "You can compare up to {max} products",
+    "compareClear": "Clear selection",
+    "compareAction": "Compare",
+    "compareTitle": "Product comparison",
+    "compareNeedTwo": "Select at least 2 products to compare.",
+    "compareLimitTitle": "Limit reached",
+    "compareLimitBody": "You can compare up to {max} products.",
+    "compareBestPrice": "Best price",
+    "compareProductsLabel": "Products",
+    "compareRowListPrice": "List price",
+    "compareRowBrand": "Brand",
+    "compareRowCategory": "Category",
+    "compareRowStock": "Stock",
+    "compareRowSku": "SKU",
+    "compareRowName": "Product",
+    "compareRowPrice": "Price",
+    "compareRowLink": "Details"
   },
   "Contact": {
     "metadataTitle": "Contact",
@@ -429,31 +467,31 @@
     "pages": {
       "hakkimizda": {
         "title": "About us",
-        "body": "BORAVIN About us content can be edited from the admin panel."
+        "body": "Boravin Bilişim Ltd. has sold technology in Kyrenia since 2003."
       },
       "kvkk": {
         "title": "Privacy (KVKK)",
-        "body": "BORAVIN KVKK / privacy content can be edited from the admin panel."
+        "body": "The data controller is Boravin Bilişim Ltd. Requests: info@boravin.com."
       },
       "gizlilik": {
         "title": "Privacy policy",
-        "body": "BORAVIN Privacy policy content can be edited from the admin panel."
+        "body": "The site uses essential cookies for the cart, language and account."
       },
       "kullanim-sartlari": {
         "title": "Terms of use",
-        "body": "BORAVIN Terms of use content can be edited from the admin panel."
+        "body": "The site is operated by Boravin Bilişim Ltd. Prices are in TRY."
       },
       "iade": {
         "title": "Returns policy",
-        "body": "BORAVIN Returns policy content can be edited from the admin panel."
+        "body": "Unused products can be returned within 14 days of delivery."
       },
       "kargo": {
         "title": "Shipping",
-        "body": "BORAVIN Shipping content can be edited from the admin panel."
+        "body": "Delivery inside the TRNC. Free shipping on orders of 5,000 TL and above."
       },
       "sss": {
         "title": "FAQ",
-        "body": "BORAVIN FAQ content can be edited from the admin panel."
+        "body": "Answers on address, hours, shipping, returns and service."
       }
     }
   },

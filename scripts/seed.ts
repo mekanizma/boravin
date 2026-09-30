@@ -42,6 +42,7 @@ import {
   users,
 } from "../src/lib/db/schema";
 import { slugify } from "../src/lib/utils";
+import { cmsPagesForDatabase } from "../src/lib/storefront/cms-pages";
 import {
   siteContact,
   siteContactAddress,
@@ -683,11 +684,34 @@ async function seed() {
       config: { ctaLabel: "Koleksiyonu aç", ctaHref: "/urunler", mock: true },
       items: [
         {
-          title: "Flagship vitrin",
+          title: "Seçilmiş sistemler, net fiyat",
+          subtitle:
+            "Gaming ve ofis için hazırlanan kasalar. Parça listesi açık, stok mağazada.",
           imageUrl:
-            "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=1600&h=2000&q=80",
+            "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=1600&h=900&q=80",
           linkUrl: "/urunler",
-          buttonLabel: "Ürünleri gör",
+          buttonLabel: "Alışverişe başla",
+          meta: { eyebrow: "Hazır sistemler" },
+        },
+        {
+          title: "Oyuncu ve iş laptopu aynı rafta",
+          subtitle:
+            "ASUS, Apple ve günlük kullanım için seçilmiş dizüstüler.",
+          imageUrl:
+            "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1600&h=900&q=80",
+          linkUrl: "/kategori/bilgisayar",
+          buttonLabel: "Alışverişe başla",
+          meta: { eyebrow: "Notebook" },
+        },
+        {
+          title: "Bu haftanın teknoloji vitrini",
+          subtitle:
+            "Seçili ürünlerde indirimli fiyat. Stok bitince liste kapanır.",
+          imageUrl:
+            "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1600&h=900&q=80",
+          linkUrl: "/kampanya/yaz-teknoloji",
+          buttonLabel: "Alışverişe başla",
+          meta: { eyebrow: "Kampanya" },
         },
       ],
     },
@@ -815,6 +839,7 @@ async function seed() {
           imageUrl: "imageUrl" in item ? item.imageUrl : undefined,
           linkUrl: "linkUrl" in item ? item.linkUrl : undefined,
           buttonLabel: "buttonLabel" in item ? item.buttonLabel : undefined,
+          meta: "meta" in item ? item.meta : {},
           sortOrder: i,
         });
       }
@@ -889,50 +914,39 @@ async function seed() {
   }
 
   // CMS pages
-  for (const [title, slug] of [
-    ["Hakkımızda", "hakkimizda"],
-    ["İletişim", "iletisim"],
-    ["KVKK", "kvkk"],
-    ["Gizlilik", "gizlilik"],
-    ["Kullanım Şartları", "kullanim-sartlari"],
-    ["İade Şartları", "iade"],
-    ["Kargo", "kargo"],
-    ["SSS", "sss"],
-  ] as const) {
-    const content =
-      slug === "iletisim"
-        ? siteContactPageHtml()
-        : `<h1>${title}</h1><p>BORAVIN ${title} içeriği admin panelinden düzenlenebilir.</p>`;
-    const row = {
-      title,
-      slug,
-      content,
-      status: "published" as const,
-      publishedAt: new Date(),
-      seoTitle: `${title} | Boravin`,
-      seoDescription:
-        slug === "iletisim"
-          ? `${siteContact.companyName}, ${siteContactAddress}`
-          : undefined,
-    };
-    if (slug === "iletisim") {
-      await db
-        .insert(pages)
-        .values(row)
-        .onConflictDoUpdate({
-          target: pages.slug,
-          set: {
-            title,
-            content,
-            status: "published",
-            seoTitle: row.seoTitle,
-            seoDescription: row.seoDescription,
-            updatedAt: new Date(),
-          },
-        });
-    } else {
-      await db.insert(pages).values(row).onConflictDoNothing();
-    }
+  const cmsRows = [
+    ...cmsPagesForDatabase(),
+    {
+      title: "İletişim",
+      slug: "iletisim",
+      content: siteContactPageHtml(),
+      seoTitle: "İletişim | Boravin",
+      seoDescription: `${siteContact.companyName}, ${siteContactAddress}`,
+    },
+  ];
+  for (const page of cmsRows) {
+    await db
+      .insert(pages)
+      .values({
+        title: page.title,
+        slug: page.slug,
+        content: page.content,
+        status: "published",
+        publishedAt: new Date(),
+        seoTitle: page.seoTitle,
+        seoDescription: page.seoDescription,
+      })
+      .onConflictDoUpdate({
+        target: pages.slug,
+        set: {
+          title: page.title,
+          content: page.content,
+          status: "published",
+          seoTitle: page.seoTitle,
+          seoDescription: page.seoDescription,
+          updatedAt: new Date(),
+        },
+      });
   }
 
   await db.insert(blogPosts).values([
