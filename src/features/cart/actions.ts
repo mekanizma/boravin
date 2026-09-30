@@ -253,17 +253,79 @@ export async function removeCartItem(itemId: string) {
   return getCart();
 }
 
-export async function applyCoupon(code: string) {
-  const cart = await getOrCreateCartId();
-  const coupon = await db.query.coupons.findFirst({
-    where: and(eq(coupons.code, code.toUpperCase()), eq(coupons.isActive, true)),
-  });
-  if (!coupon) throw new Error("INVALID_COUPON");
-  await db
-    .update(carts)
-    .set({ couponCode: coupon.code, updatedAt: new Date() })
-    .where(eq(carts.id, cart.id));
-  return getCheckoutBundle();
+export async function applyCoupon(code: string): Promise<
+  | { ok: true }
+  | { ok: false; error: string }
+> {
+  try {
+    const cart = await getOrCreateCartId();
+    const normalized = code.trim().toUpperCase();
+    if (!normalized) {
+      return { ok: false, error: "Kupon kodu girin." };
+    }
+
+    const coupon = await db.query.coupons.findFirst({
+      where: and(eq(coupons.code, normalized), eq(coupons.isActive, true)),
+    });
+    if (!coupon) {
+      return { ok: false, error: "Geçersiz veya pasif kupon kodu." };
+    }
+
+    const now = new Date();
+    if (coupon.startsAt && coupon.startsAt > now) {
+      return { ok: false, error: "Bu kupon henüz geçerli değil." };
+    }
+    if (coupon.endsAt && coupon.endsAt <= now) {
+      return { ok: false, error: "Bu kuponun süresi dolmuş." };
+    }
+    if (
+      coupon.usageLimit != null &&
+      coupon.usageCount >= coupon.usageLimit
+    ) {
+      return { ok: false, error: "Bu kupon kullanım limitine ulaştı." };
+    }
+
+    const items = await db.query.cartItems.findMany({
+      where: eq(cartItems.cartId, cart.id),
+    });
+    const subtotal = items.reduce(
+      (sum, item) => sum + Number(item.unitPrice) * item.quantity,
+      0,
+    );
+    if (
+      coupon.minCartAmount != null &&
+      subtotal < Number(coupon.minCartAmount)
+    ) {
+      return {
+        ok: false,
+        error: `Bu kupon için minimum sepet tutarı ${coupon.minCartAmount} TL.`,
+      };
+    }
+
+    await db
+      .update(carts)
+      .set({ couponCode: coupon.code, updatedAt: new Date() })
+      .where(eq(carts.id, cart.id));
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Kupon uygulanamadı." };
+  }
+}
+
+export async function removeCoupon(): Promise<
+  | { ok: true }
+  | { ok: false; error: string }
+> {
+  try {
+    const cart = await getOrCreateCartId();
+    await db
+      .update(carts)
+      .set({ couponCode: null, updatedAt: new Date() })
+      .where(eq(carts.id, cart.id));
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Kupon kaldırılamadı." };
+  }
 }
 
 function computeTotals(

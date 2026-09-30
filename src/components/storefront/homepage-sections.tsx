@@ -177,28 +177,73 @@ async function Showcase({
   );
 }
 
-async function PromoRow() {
+const MOCK_CAMPAIGN_IMAGE =
+  "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=1400&h=900&q=80";
+
+async function PromoRow({
+  banners,
+  campaigns,
+}: {
+  banners?: {
+    id: string;
+    title: string;
+    description?: string | null;
+    imageUrl?: string | null;
+    linkUrl?: string | null;
+    cta?: string | null;
+  }[];
+  campaigns?: {
+    id: string;
+    name: string;
+    slug: string;
+    shortDescription?: string | null;
+    cta?: string | null;
+  }[];
+}) {
   const t = await getTranslations("Home");
-  const cards = [
-    {
-      title: t("promo0Title"),
-      body: t("promo0Body"),
-      href: "/urunler?q=gaming",
-      image: MOCK_CATEGORIES[2].imageUrl,
-    },
-    {
-      title: t("promo1Title"),
-      body: t("promo1Body"),
-      href: "/urunler",
-      image: MOCK_CAMPAIGN_IMAGE,
-    },
-  ];
+  const cards =
+    campaigns && campaigns.length
+      ? campaigns.map((campaign) => ({
+          id: campaign.id,
+          title: campaign.name,
+          body: campaign.shortDescription?.trim() || "",
+          href: `/kampanya/${campaign.slug}`,
+          image: MOCK_CAMPAIGN_IMAGE,
+          cta: campaign.cta?.trim() || t("promoCta"),
+        }))
+      : banners && banners.length
+        ? banners.map((banner) => ({
+            id: banner.id,
+            title: banner.title,
+            body: banner.description?.trim() || "",
+            href: banner.linkUrl?.trim() || "/urunler",
+            image: banner.imageUrl?.trim() || MOCK_CAMPAIGN_IMAGE,
+            cta: banner.cta?.trim() || t("promoCta"),
+          }))
+        : [
+            {
+              id: "promo-0",
+              title: t("promo0Title"),
+              body: t("promo0Body"),
+              href: "/urunler?q=gaming",
+              image: MOCK_CATEGORIES[2].imageUrl,
+              cta: t("promoCta"),
+            },
+            {
+              id: "promo-1",
+              title: t("promo1Title"),
+              body: t("promo1Body"),
+              href: "/urunler",
+              image: MOCK_CAMPAIGN_IMAGE,
+              cta: t("promoCta"),
+            },
+          ];
 
   return (
     <section className="container-bv grid gap-5 py-5 sm:grid-cols-2 sm:gap-6 sm:py-8">
       {cards.map((card) => (
         <Link
-          key={card.title}
+          key={card.id}
           href={card.href}
           className="bv-plate group block transition-transform duration-200"
         >
@@ -213,9 +258,11 @@ async function PromoRow() {
             <span className="absolute inset-0 bg-gradient-to-t from-[#121417] via-[#121417]/55 to-transparent" />
             <span className="relative mt-auto block p-5">
               <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{card.title}</h2>
-              <p className="mt-1 max-w-sm text-sm text-white/75">{card.body}</p>
+              {card.body ? (
+                <p className="mt-1 max-w-sm text-sm text-white/75">{card.body}</p>
+              ) : null}
               <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold">
-                {t("promoCta")}
+                {card.cta}
                 <ArrowRight className="h-4 w-4" />
               </span>
             </span>
@@ -225,9 +272,6 @@ async function PromoRow() {
     </section>
   );
 }
-
-const MOCK_CAMPAIGN_IMAGE =
-  "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=1400&h=900&q=80";
 
 async function BrandStrip({ section }: { section?: HomepageSection }) {
   const t = await getTranslations("Home");
@@ -369,9 +413,26 @@ function poolFrom(
 export async function HomepageSections({
   sections,
   featuredProduct,
+  promoBanners,
+  promoCampaigns,
 }: {
   sections: HomepageSection[];
   featuredProduct?: ProductCardData | null;
+  promoBanners?: {
+    id: string;
+    title: string;
+    description?: string | null;
+    imageUrl?: string | null;
+    linkUrl?: string | null;
+    cta?: string | null;
+  }[];
+  promoCampaigns?: {
+    id: string;
+    name: string;
+    slug: string;
+    shortDescription?: string | null;
+    cta?: string | null;
+  }[];
 }) {
   const t = await getTranslations("Home");
   const locale = await getStorefrontLocale();
@@ -408,7 +469,7 @@ export async function HomepageSections({
         )}
         products={first.length ? first : pool}
       />
-      <PromoRow />
+      <PromoRow banners={promoBanners} campaigns={promoCampaigns} />
       <Showcase
         title={localizeHomeCopy(
           locale,
@@ -434,10 +495,27 @@ export async function FallbackHero({
   featured,
   products = [],
   heroSlides = [],
+  promoBanners,
+  promoCampaigns,
 }: {
   featured?: ProductCardData | null;
   products?: ProductCardData[];
   heroSlides?: HeroSliderSlide[];
+  promoBanners?: {
+    id: string;
+    title: string;
+    description?: string | null;
+    imageUrl?: string | null;
+    linkUrl?: string | null;
+    cta?: string | null;
+  }[];
+  promoCampaigns?: {
+    id: string;
+    name: string;
+    slug: string;
+    shortDescription?: string | null;
+    cta?: string | null;
+  }[];
 }) {
   const t = await getTranslations("Home");
   const pool = poolFrom([], featured, products);
@@ -450,7 +528,7 @@ export async function FallbackHero({
         subtitle={t("featuredSubtitle")}
         products={pool.slice(0, 4)}
       />
-      <PromoRow />
+      <PromoRow banners={promoBanners} campaigns={promoCampaigns} />
       <Showcase
         title={t("vitrineTitle")}
         subtitle={t("vitrineSubtitle")}

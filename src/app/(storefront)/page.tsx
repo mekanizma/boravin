@@ -15,6 +15,10 @@ import {
 import type { ProductCardData } from "@/components/storefront/product-card";
 import { publicImageUrl } from "@/lib/media/url";
 import { loadCachedProductCards } from "@/lib/storefront/products";
+import { getHomepageBannerAnnouncements } from "@/lib/storefront/announcements";
+import { loadPublishedCampaigns } from "@/lib/storefront/campaigns";
+
+export const dynamic = "force-dynamic";
 
 async function loadHomepageSectionsUncached(): Promise<HomepageSection[] | null> {
   try {
@@ -134,7 +138,11 @@ const loadHomepageSections = unstable_cache(
 );
 
 export default async function HomePage() {
-  const sections = await loadHomepageSections();
+  const [sections, promoBanners, promoCampaigns] = await Promise.all([
+    loadHomepageSections(),
+    getHomepageBannerAnnouncements(2),
+    loadPublishedCampaigns(2),
+  ]);
 
   if (sections === null || sections.length === 0) {
     const featuredCards = await loadCachedProductCards({
@@ -150,8 +158,21 @@ export default async function HomePage() {
         ? featuredCards
         : await loadCachedProductCards({ limit: 8 });
 
-    return <FallbackHero featured={featured} products={grid} />;
+    return (
+      <FallbackHero
+        featured={featured}
+        products={grid}
+        promoBanners={promoBanners}
+        promoCampaigns={promoCampaigns}
+      />
+    );
   }
 
-  return <HomepageSections sections={sections} />;
+  return (
+    <HomepageSections
+      sections={sections}
+      promoBanners={promoBanners}
+      promoCampaigns={promoCampaigns}
+    />
+  );
 }

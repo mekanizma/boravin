@@ -11,6 +11,7 @@ export async function SiteFooter() {
       title: t("storeTitle"),
       links: [
         { href: "/urunler", label: t("storeAllProducts") },
+        { href: "/kampanyalar", label: t("storeCampaigns") },
         { href: "/kategori/bilgisayar", label: t("storeComputers") },
         { href: "/kategori/telefon", label: t("storePhones") },
         { href: "/kategori/yazicilar", label: t("storePrinters") },

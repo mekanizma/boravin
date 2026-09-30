@@ -148,10 +148,10 @@ export function NewCampaignButton() {
           kind: "select",
           name: "status",
           label: "Durum",
-          defaultValue: "draft",
+          defaultValue: "published",
           options: [
-            { value: "draft", label: "Taslak" },
             { value: "published", label: "Yayında" },
+            { value: "draft", label: "Taslak" },
           ],
         },
         {
@@ -174,7 +174,7 @@ export function NewCampaignButton() {
             | "free_shipping"
             | "coupon",
           value: v.value ? Number(v.value) : null,
-          status: (v.status as "draft" | "published") || "draft",
+          status: (v.status as "draft" | "published") || "published",
           shortDescription: v.shortDescription || null,
         })
       }
@@ -267,11 +267,19 @@ export function NewAnnouncementButton() {
           kind: "select",
           name: "status",
           label: "Durum",
-          defaultValue: "draft",
+          defaultValue: "published",
           options: [
-            { value: "draft", label: "Taslak" },
             { value: "published", label: "Yayında" },
+            { value: "draft", label: "Taslak" },
           ],
+        },
+        {
+          name: "priority",
+          label: "Öncelik",
+          type: "number",
+          inputMode: "numeric",
+          defaultValue: "0",
+          hint: "Yüksek sayı önce gösterilir.",
         },
         {
           kind: "textarea",
@@ -297,10 +305,11 @@ export function NewAnnouncementButton() {
             | "popup"
             | "homepage_banner"
             | "campaign_banner",
-          status: (v.status as "draft" | "published") || "draft",
+          status: (v.status as "draft" | "published") || "published",
           description: v.description || null,
           linkUrl: v.linkUrl || null,
           cta: v.cta || null,
+          priority: v.priority ? Number(v.priority) : 0,
         })
       }
     />

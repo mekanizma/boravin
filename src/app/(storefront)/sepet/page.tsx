@@ -5,6 +5,7 @@ import { formatMoneyServer } from "@/lib/i18n/format";
 import { translateVariantLabel } from "@/lib/i18n/variant-label";
 import { Button } from "@/components/ui/button";
 import { CartLineControls } from "@/components/storefront/cart-line-controls";
+import { CartCouponForm } from "@/components/storefront/cart-coupon-form";
 
 export async function generateMetadata() {
   const t = await getTranslations("Cart");
@@ -69,6 +70,7 @@ export default async function CartPage() {
         </ul>
         <aside className="h-fit rounded-[var(--radius-lg)] border border-[var(--bv-border)] bg-white p-4">
           <h2 className="font-semibold">{t("summary")}</h2>
+          <CartCouponForm couponCode={totals.couponCode} />
           <dl className="mt-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <dt>{t("subtotal")}</dt>

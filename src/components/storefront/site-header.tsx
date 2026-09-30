@@ -245,12 +245,21 @@ function CategoryPanel({
   );
 }
 
-export function SiteHeader() {
+export function SiteHeader({
+  promoBar,
+}: {
+  promoBar?: {
+    title: string;
+    linkUrl?: string | null;
+  } | null;
+} = {}) {
   const t = useTranslations("Header");
   const tCommon = useTranslations("Common");
   const formatMoney = useFormatMoney();
   const categoryLabel = useCategoryLabel();
   const pathname = usePathname();
+  const promoText = promoBar?.title?.trim() || t("promoBar");
+  const promoHref = promoBar?.linkUrl?.trim() || null;
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [drawerSection, setDrawerSection] = React.useState<string | null>(null);
   const [openNav, setOpenNav] = React.useState<string | null>(null);
@@ -264,6 +273,7 @@ export function SiteHeader() {
     () => [
       { href: "/", label: t("utilityHome") },
       { href: categoryHref("2. El Ürünler"), label: t("utilityUsed") },
+      { href: "/kampanyalar", label: t("utilityCampaigns") },
       { href: "/sayfa/sss", label: t("utilityCustomerService") },
       { href: "/sayfa/iletisim", label: t("utilityContact") },
     ],
@@ -368,7 +378,13 @@ export function SiteHeader() {
           <div className="container-bv flex h-9 items-center justify-between gap-4">
             <p className="inline-flex min-w-0 items-center gap-2 font-medium">
               <Package className="h-3.5 w-3.5 shrink-0 text-white" strokeWidth={2} />
-              <span className="truncate">{t("promoBar")}</span>
+              {promoHref ? (
+                <Link href={promoHref} className="truncate hover:text-white/85">
+                  {promoText}
+                </Link>
+              ) : (
+                <span className="truncate">{promoText}</span>
+              )}
             </p>
             <div className="flex shrink-0 items-center gap-2 lg:hidden">
               <LanguageSwitcher />

@@ -1,7 +1,7 @@
 "use server";
 
-import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { eq, sql } from "drizzle-orm";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
@@ -164,7 +164,7 @@ const campaignSchema = z.object({
   ]),
   value: z.coerce.number().nonnegative().optional().nullable(),
   shortDescription: z.string().trim().max(500).optional().nullable(),
-  status: z.enum(["draft", "scheduled", "published", "archived"]).default("draft"),
+  status: z.enum(["draft", "scheduled", "published", "archived"]).default("published"),
 });
 
 export async function createCampaign(
@@ -194,6 +194,7 @@ export async function createCampaign(
         value: data.value != null ? String(data.value) : null,
         shortDescription: data.shortDescription?.trim() || null,
         status: data.status,
+        cta: "Hemen keşfet",
         startsAt: new Date(),
         endsAt: new Date(Date.now() + 30 * 86400000),
       })
@@ -207,6 +208,9 @@ export async function createCampaign(
       after: { name: data.name, slug, type: data.type },
     });
     revalidatePath("/admin/campaigns");
+    revalidatePath("/");
+    revalidatePath("/kampanyalar");
+    revalidatePath(`/kampanya/${slug}`);
     return { ok: true, id: row.id };
   } catch (e) {
     if (e instanceof z.ZodError) return fail("Geçersiz kampanya bilgisi.");
@@ -263,6 +267,8 @@ export async function createCoupon(
       after: { code, type: data.type, value: data.value },
     });
     revalidatePath("/admin/coupons");
+    revalidatePath("/sepet");
+    revalidatePath("/odeme");
     return { ok: true, id: row.id };
   } catch (e) {
     if (e instanceof z.ZodError) return fail("Geçersiz kupon bilgisi.");
@@ -279,8 +285,16 @@ const announcementSchema = z.object({
   type: z.enum(["top_bar", "popup", "homepage_banner", "campaign_banner"]),
   linkUrl: z.string().trim().max(500).optional().nullable(),
   cta: z.string().trim().max(120).optional().nullable(),
-  status: z.enum(["draft", "scheduled", "published", "archived"]).default("draft"),
+  status: z.enum(["draft", "scheduled", "published", "archived"]).default("published"),
+  priority: z.number().int().min(0).max(999).optional(),
 });
+
+function revalidateAnnouncements() {
+  revalidatePath("/admin/announcements");
+  revalidateTag("announcements", "max");
+  revalidatePath("/", "layout");
+  revalidatePath("/");
+}
 
 export async function createAnnouncement(
   raw: z.infer<typeof announcementSchema>,
@@ -288,6 +302,20 @@ export async function createAnnouncement(
   try {
     const session = await requirePermission("CONTENT_MANAGE");
     const data = announcementSchema.parse(raw);
+
+    let priority = data.priority ?? 0;
+    if (data.priority == null || data.priority === 0) {
+      try {
+        const [row] = await db
+          .select({
+            max: sql<number>`coalesce(max(${announcements.priority}), 0)::int`,
+          })
+          .from(announcements);
+        priority = (row?.max ?? 0) + 1;
+      } catch {
+        priority = 1;
+      }
+    }
 
     const [row] = await db
       .insert(announcements)
@@ -298,8 +326,9 @@ export async function createAnnouncement(
         linkUrl: data.linkUrl?.trim() || null,
         cta: data.cta?.trim() || null,
         status: data.status,
+        priority,
         startsAt: new Date(),
-        endsAt: new Date(Date.now() + 14 * 86400000),
+        endsAt: new Date(Date.now() + 30 * 86400000),
       })
       .returning();
 
@@ -310,7 +339,7 @@ export async function createAnnouncement(
       entityId: row.id,
       after: { title: data.title, type: data.type },
     });
-    revalidatePath("/admin/announcements");
+    revalidateAnnouncements();
     return { ok: true, id: row.id };
   } catch (e) {
     if (e instanceof z.ZodError) return fail("Geçersiz duyuru bilgisi.");
@@ -318,6 +347,129 @@ export async function createAnnouncement(
       return fail("Bu işlem için yetkiniz yok.");
     }
     return fail("Duyuru eklenemedi.");
+  }
+}
+
+export async function updateAnnouncement(
+  id: string,
+  raw: z.infer<typeof announcementSchema>,
+): Promise<ActionResult> {
+  try {
+    const session = await requirePermission("CONTENT_MANAGE");
+    const data = announcementSchema.parse(raw);
+
+    const before = await db.query.announcements.findFirst({
+      where: eq(announcements.id, id),
+    });
+    if (!before) return fail("Duyuru bulunamadı.");
+
+    const [row] = await db
+      .update(announcements)
+      .set({
+        title: data.title,
+        description: data.description?.trim() || null,
+        type: data.type,
+        linkUrl: data.linkUrl?.trim() || null,
+        cta: data.cta?.trim() || null,
+        status: data.status,
+        priority: data.priority ?? before.priority,
+        updatedAt: new Date(),
+      })
+      .where(eq(announcements.id, id))
+      .returning();
+
+    await writeAuditLog({
+      userId: session.user.id,
+      action: "ANNOUNCEMENT_UPDATE",
+      entityType: "announcement",
+      entityId: row.id,
+      before: { title: before.title, status: before.status, type: before.type },
+      after: { title: data.title, status: data.status, type: data.type },
+    });
+    revalidateAnnouncements();
+    return { ok: true, id: row.id };
+  } catch (e) {
+    if (e instanceof z.ZodError) return fail("Geçersiz duyuru bilgisi.");
+    if (e instanceof Error && (e.message === "UNAUTHORIZED" || e.message === "FORBIDDEN")) {
+      return fail("Bu işlem için yetkiniz yok.");
+    }
+    return fail("Duyuru güncellenemedi.");
+  }
+}
+
+export async function setAnnouncementStatus(
+  id: string,
+  status: "published" | "draft" | "archived",
+): Promise<ActionResult> {
+  try {
+    const session = await requirePermission("CONTENT_MANAGE");
+    const before = await db.query.announcements.findFirst({
+      where: eq(announcements.id, id),
+    });
+    if (!before) return fail("Duyuru bulunamadı.");
+
+    const [row] = await db
+      .update(announcements)
+      .set({
+        status,
+        updatedAt: new Date(),
+        ...(status === "published"
+          ? {
+              startsAt: new Date(),
+              endsAt: new Date(Date.now() + 30 * 86400000),
+            }
+          : {}),
+      })
+      .where(eq(announcements.id, id))
+      .returning();
+
+    await writeAuditLog({
+      userId: session.user.id,
+      action:
+        status === "published"
+          ? "ANNOUNCEMENT_PUBLISH"
+          : status === "draft"
+            ? "ANNOUNCEMENT_UNPUBLISH"
+            : "ANNOUNCEMENT_ARCHIVE",
+      entityType: "announcement",
+      entityId: row.id,
+      before: { status: before.status },
+      after: { status },
+    });
+    revalidateAnnouncements();
+    return { ok: true, id: row.id };
+  } catch (e) {
+    if (e instanceof Error && (e.message === "UNAUTHORIZED" || e.message === "FORBIDDEN")) {
+      return fail("Bu işlem için yetkiniz yok.");
+    }
+    return fail("Duyuru durumu güncellenemedi.");
+  }
+}
+
+export async function deleteAnnouncement(id: string): Promise<ActionResult> {
+  try {
+    const session = await requirePermission("CONTENT_MANAGE");
+    const before = await db.query.announcements.findFirst({
+      where: eq(announcements.id, id),
+    });
+    if (!before) return fail("Duyuru bulunamadı.");
+
+    await db.delete(announcements).where(eq(announcements.id, id));
+
+    await writeAuditLog({
+      userId: session.user.id,
+      action: "ANNOUNCEMENT_DELETE",
+      entityType: "announcement",
+      entityId: id,
+      before: { title: before.title, type: before.type, status: before.status },
+    });
+    revalidateAnnouncements();
+    return { ok: true, id };
+  } catch (e) {
+    if (e instanceof Error && (e.message === "UNAUTHORIZED" || e.message === "FORBIDDEN")) {
+      return fail("Bu işlem için yetkiniz yok.");
+    }
+    return fail("Duyuru silinemedi.");
   }
 }
 

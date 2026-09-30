@@ -72,6 +72,7 @@
     },
     "utilityHome": "Home",
     "utilityUsed": "Used Products",
+    "utilityCampaigns": "Campaigns",
     "utilityCustomerService": "Customer Service",
     "utilityContact": "Contact",
     "promoBar": "Free shipping on orders over 5,000 TL",
@@ -92,6 +93,7 @@
   "Footer": {
     "storeTitle": "Store",
     "storeAllProducts": "All products",
+    "storeCampaigns": "Campaigns",
     "storeComputers": "Computers",
     "storePhones": "Phones",
     "storePrinters": "Printers",
@@ -219,7 +221,17 @@
     "shipRemaining": "{amount} more · free shipping",
     "addToCart": "Add to cart",
     "adding": "Adding…",
-    "delete": "Delete"
+    "delete": "Delete",
+    "couponLabel": "Coupon code",
+    "couponPlaceholder": "e.g. WELCOME10",
+    "couponApply": "Apply",
+    "couponApplying": "Applying…",
+    "couponApplied": "Coupon applied",
+    "couponAppliedCode": "Coupon: {code}",
+    "couponRemove": "Remove",
+    "couponRemoved": "Coupon removed",
+    "couponErrorTitle": "Could not apply coupon",
+    "couponRemoveError": "Could not remove coupon"
   },
   "Checkout": {
     "breadcrumbCart": "Cart",
@@ -462,6 +474,10 @@
     "campaignEyebrow": "Campaign",
     "campaignNotFoundTitle": "Campaign",
     "campaignNotFoundBody": "Campaign not found or not published yet.",
+    "campaignsListTitle": "Campaigns",
+    "campaignsListSubtitle": "Current offers and seasonal discounts.",
+    "campaignsEmpty": "No campaigns are live right now.",
+    "campaignDefaultBody": "Open the campaign for details.",
     "goToProducts": "Go to products",
     "defaultCta": "Start shopping",
     "pages": {

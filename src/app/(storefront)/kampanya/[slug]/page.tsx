@@ -1,7 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { db } from "@/lib/db";
-import { campaigns } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { getPublishedCampaignBySlug } from "@/lib/storefront/campaigns";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -12,14 +10,8 @@ export default async function CampaignPage({
 }) {
   const t = await getTranslations("Cms");
   const { slug } = await params;
-  let campaign = null;
-  try {
-    campaign = await db.query.campaigns.findFirst({
-      where: eq(campaigns.slug, slug),
-    });
-  } catch {
-    campaign = null;
-  }
+  const campaign = await getPublishedCampaignBySlug(slug);
+
   if (!campaign) {
     return (
       <div className="container-bv py-16 text-center">
@@ -27,9 +19,14 @@ export default async function CampaignPage({
         <p className="mt-2 text-[var(--bv-muted)]">
           {t("campaignNotFoundBody")}
         </p>
-        <Link href="/urunler" className="mt-6 inline-block">
-          <Button variant="accent">{t("goToProducts")}</Button>
-        </Link>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <Link href="/kampanyalar">
+            <Button variant="secondary">{t("campaignsListTitle")}</Button>
+          </Link>
+          <Link href="/urunler">
+            <Button variant="accent">{t("goToProducts")}</Button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -52,9 +49,14 @@ export default async function CampaignPage({
           {campaign.description}
         </p>
       ) : null}
-      <Link href="/urunler" className="mt-8 inline-block">
-        <Button variant="accent">{campaign.cta ?? t("defaultCta")}</Button>
-      </Link>
+      <div className="mt-8 flex flex-wrap gap-3">
+        <Link href="/urunler">
+          <Button variant="accent">{campaign.cta ?? t("defaultCta")}</Button>
+        </Link>
+        <Link href="/kampanyalar">
+          <Button variant="secondary">{t("campaignsListTitle")}</Button>
+        </Link>
+      </div>
     </div>
   );
 }

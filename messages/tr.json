@@ -72,6 +72,7 @@
     },
     "utilityHome": "Anasayfa",
     "utilityUsed": "2. El Ürünler",
+    "utilityCampaigns": "Kampanyalar",
     "utilityCustomerService": "Müşteri Hizmetleri",
     "utilityContact": "İletişim",
     "promoBar": "5.000 TL ve üzeri alışverişlerde kargo ücretsiz",
@@ -92,6 +93,7 @@
   "Footer": {
     "storeTitle": "Mağaza",
     "storeAllProducts": "Tüm ürünler",
+    "storeCampaigns": "Kampanyalar",
     "storeComputers": "Bilgisayar",
     "storePhones": "Telefonlar",
     "storePrinters": "Yazıcılar",
@@ -219,7 +221,17 @@
     "shipRemaining": "{amount} daha · kargo bedava",
     "addToCart": "Sepete ekle",
     "adding": "Ekleniyor…",
-    "delete": "Sil"
+    "delete": "Sil",
+    "couponLabel": "Kupon kodu",
+    "couponPlaceholder": "Örn. WELCOME10",
+    "couponApply": "Uygula",
+    "couponApplying": "Uygulanıyor…",
+    "couponApplied": "Kupon uygulandı",
+    "couponAppliedCode": "Kupon: {code}",
+    "couponRemove": "Kaldır",
+    "couponRemoved": "Kupon kaldırıldı",
+    "couponErrorTitle": "Kupon uygulanamadı",
+    "couponRemoveError": "Kupon kaldırılamadı"
   },
   "Checkout": {
     "breadcrumbCart": "Sepet",
@@ -462,6 +474,10 @@
     "campaignEyebrow": "Kampanya",
     "campaignNotFoundTitle": "Kampanya",
     "campaignNotFoundBody": "Kampanya bulunamadı veya henüz yayınlanmadı.",
+    "campaignsListTitle": "Kampanyalar",
+    "campaignsListSubtitle": "Güncel fırsatlar ve dönemsel indirimler.",
+    "campaignsEmpty": "Şu an yayında kampanya yok.",
+    "campaignDefaultBody": "Detaylar için kampanyayı inceleyin.",
     "goToProducts": "Ürünlere git",
     "defaultCta": "Alışverişe başla",
     "pages": {
