@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { SafeImage } from "@/components/ui/safe-image";
 
 export type HeroSliderSlide = {
   id?: string;
@@ -23,7 +23,7 @@ const FALLBACK_SLIDES: HeroSliderSlide[] = [
     title: "",
     body: "",
     imageUrl:
-      "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=1600&h=900&q=80",
+      "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=1200&h=675&q=75",
     linkUrl: "/urunler",
   },
   {
@@ -32,7 +32,7 @@ const FALLBACK_SLIDES: HeroSliderSlide[] = [
     title: "",
     body: "",
     imageUrl:
-      "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1600&h=900&q=80",
+      "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&h=675&q=75",
     linkUrl: "/kategori/bilgisayar",
   },
   {
@@ -41,7 +41,7 @@ const FALLBACK_SLIDES: HeroSliderSlide[] = [
     title: "",
     body: "",
     imageUrl:
-      "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1600&h=900&q=80",
+      "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&h=675&q=75",
     linkUrl: "/kampanya/yaz-teknoloji",
   },
 ];
@@ -50,9 +50,14 @@ export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
   const t = useTranslations("Home");
   const [index, setIndex] = React.useState(0);
   const [paused, setPaused] = React.useState(false);
+  const [broken, setBroken] = React.useState<Record<string, true>>({});
 
   const resolved = React.useMemo(() => {
-    const fromCms = (slides ?? []).filter((slide) => slide.imageUrl);
+    const fromCms = (slides ?? []).filter((slide) => {
+      if (!slide.imageUrl) return false;
+      const key = slide.id ?? slide.imageUrl;
+      return !broken[key];
+    });
     if (fromCms.length) return fromCms;
 
     return FALLBACK_SLIDES.map((slide, i) => ({
@@ -62,7 +67,7 @@ export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
       body: t(`slide${i}Body` as "slide0Body"),
       buttonLabel: t("heroCta"),
     }));
-  }, [slides, t]);
+  }, [slides, t, broken]);
 
   React.useEffect(() => {
     setIndex(0);
@@ -87,6 +92,7 @@ export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
   const hasCopy = Boolean(eyebrow || title || body);
   const hasLink = Boolean(linkUrl);
   const ctaLabel = meta.buttonLabel?.trim() || t("heroCta");
+  const slideKey = meta.id ?? meta.imageUrl;
 
   function go(next: number) {
     setIndex((next + resolved.length) % resolved.length);
@@ -98,46 +104,51 @@ export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <div className="bv-hero-band__glow" aria-hidden />
-      <div className="bv-hero-band__grid" aria-hidden />
       <div className="container-bv relative py-5 sm:py-7">
-        <div className="bv-hero-slab bv-stage relative overflow-hidden rounded-[1.25rem] bg-[#121417] text-white">
+        <div className="bv-hero-slab bv-stage relative overflow-hidden rounded-[1.25rem] bg-[#1a1d22] text-white">
           <div className="relative aspect-[16/10] w-full sm:aspect-[2/1] lg:aspect-[21/9]">
-            <Image
-              key={meta.imageUrl}
+            <SafeImage
+              key={slideKey}
               src={meta.imageUrl}
               alt={title || eyebrow || ""}
               fill
               priority={index === 0}
-              unoptimized
-              sizes="(max-width: 1280px) 100vw, 1200px"
-              className="object-contain object-center"
+              sizes="(max-width: 768px) 100vw, (max-width: 1280px) 100vw, 1200px"
+              className="object-cover object-center"
+              fallbackSrc=""
+              onLoadError={() => {
+                setBroken((prev) =>
+                  prev[slideKey] ? prev : { ...prev, [slideKey]: true },
+                );
+              }}
             />
             {hasCopy ? (
-              <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col justify-end p-5 sm:p-8 lg:max-w-[38rem] lg:justify-center lg:p-12">
-                {eyebrow ? (
-                  <p className="text-[12px] font-bold tracking-[0.16em] text-[var(--bv-sale)] uppercase [text-shadow:0_1px_10px_rgba(0,0,0,0.7)]">
-                    {eyebrow}
-                  </p>
-                ) : null}
-                {title ? (
-                  <h1 className="mt-2 text-[1.7rem] leading-[1.05] font-bold tracking-tight [text-shadow:0_2px_16px_rgba(0,0,0,0.75)] sm:text-4xl lg:text-5xl">
-                    {title}
-                  </h1>
-                ) : null}
-                {body ? (
-                  <p className="mt-3 max-w-md text-sm leading-relaxed text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.7)] sm:text-base">
-                    {body}
-                  </p>
-                ) : null}
-                {hasLink ? (
-                  <Link
-                    href={linkUrl}
-                    className="bv-key bv-key-sea pointer-events-auto mt-6 inline-flex h-11 w-fit items-center rounded-xl bg-[var(--bv-teal)] px-5 text-sm font-semibold text-white"
-                  >
-                    {ctaLabel}
-                  </Link>
-                ) : null}
+              <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-r from-black/55 via-black/25 to-transparent">
+                <div className="flex h-full flex-col justify-end p-5 sm:p-8 lg:max-w-[38rem] lg:justify-center lg:p-12">
+                  {eyebrow ? (
+                    <p className="text-[12px] font-bold tracking-[0.16em] text-[var(--bv-sale)] uppercase">
+                      {eyebrow}
+                    </p>
+                  ) : null}
+                  {title ? (
+                    <h1 className="mt-2 text-[1.7rem] leading-[1.05] font-bold tracking-tight sm:text-4xl lg:text-5xl">
+                      {title}
+                    </h1>
+                  ) : null}
+                  {body ? (
+                    <p className="mt-3 max-w-md text-sm leading-relaxed text-white/95 sm:text-base">
+                      {body}
+                    </p>
+                  ) : null}
+                  {hasLink ? (
+                    <Link
+                      href={linkUrl}
+                      className="bv-key bv-key-sea pointer-events-auto mt-6 inline-flex h-11 w-fit items-center rounded-xl bg-[var(--bv-teal)] px-5 text-sm font-semibold text-white"
+                    >
+                      {ctaLabel}
+                    </Link>
+                  ) : null}
+                </div>
               </div>
             ) : hasLink ? (
               <Link

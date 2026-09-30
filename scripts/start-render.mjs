@@ -1,6 +1,9 @@
 /**
- * Render start: ensure persistent uploads dir is reachable from public/uploads,
- * then bind Next.js to 0.0.0.0:$PORT.
+ * Render start: ensure persistent uploads dir exists, then bind Next.js.
+ *
+ * Uploads are served by `src/app/uploads/[...path]/route.ts` from UPLOADS_DIR.
+ * Do not symlink into public/uploads — Next static 404s for missing public files
+ * and can block the App Router route from reading the persistent disk.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -14,24 +17,24 @@ const uploadsDir = (
 ).replace(/[/\\]+$/, "");
 
 fs.mkdirSync(uploadsDir, { recursive: true });
-fs.mkdirSync(path.dirname(publicUploads), { recursive: true });
 
 const resolvedPublic = path.resolve(publicUploads);
 const resolvedDisk = path.resolve(uploadsDir);
 
 if (resolvedPublic !== resolvedDisk) {
+  // Remove stale public/uploads symlink or dir so /uploads/* hits the route handler.
   try {
-    if (fs.existsSync(publicUploads)) {
-      fs.rmSync(publicUploads, { recursive: true, force: true });
-    }
+    fs.lstatSync(publicUploads);
+    fs.rmSync(publicUploads, { recursive: true, force: true });
+    console.log(
+      `[start:render] removed ${publicUploads} (serving via /uploads route)`,
+    );
   } catch {
-    // ignore — symlink will fail loudly if needed
+    // public/uploads absent — good
   }
-  fs.symlinkSync(resolvedDisk, publicUploads, "dir");
-  console.log(`[start:render] linked ${publicUploads} -> ${resolvedDisk}`);
-} else {
-  console.log(`[start:render] uploads at ${resolvedDisk}`);
 }
+
+console.log(`[start:render] uploads dir ${resolvedDisk}`);
 
 const port = process.env.PORT || "3000";
 const child = spawn(

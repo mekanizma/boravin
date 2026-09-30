@@ -105,6 +105,9 @@ export async function updateOrderStatus(raw: z.input<typeof updateSchema>) {
   revalidatePath(`/admin/orders/${order.id}`);
   revalidatePath("/admin");
   revalidatePath("/hesabim");
+  revalidatePath("/siparis-takip");
+  revalidatePath(`/siparis-takip/${order.orderNumber}`);
+  revalidatePath(`/siparis-onay/${order.orderNumber}`);
 
   return { ok: true as const, status: data.status };
 }

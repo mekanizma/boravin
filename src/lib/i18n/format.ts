@@ -30,5 +30,5 @@ export function formatDateLocale(
   options?: Intl.DateTimeFormatOptions,
 ) {
   const date = value instanceof Date ? value : new Date(value);
-  return date.toLocaleDateString(toBcp47(locale), options);
+  return date.toLocaleString(toBcp47(locale), options);
 }

@@ -211,7 +211,7 @@ export default function CheckoutPage() {
         description: t("toastSuccessDesc", { orderNumber: result.orderNumber }),
       });
       window.dispatchEvent(new Event("bv-cart-changed"));
-      router.push(`/hesabim?order=${result.orderNumber}`);
+      router.push(`/siparis-onay/${encodeURIComponent(result.orderNumber)}`);
     } catch {
       toast({
         tone: "error",

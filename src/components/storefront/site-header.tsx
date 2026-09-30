@@ -424,7 +424,7 @@ export function SiteHeader({
 
           <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
             <Link
-              href="/hesabim"
+              href="/siparis-takip"
               className="hidden h-10 items-center gap-2 px-2 text-[12px] leading-tight lg:inline-flex"
               aria-label={t("orderTracking")}
             >
@@ -660,6 +660,13 @@ export function SiteHeader({
                   </div>
                 );
               })}
+              <Link
+                href="/siparis-takip"
+                onClick={() => setMenuOpen(false)}
+                className="flex min-h-12 items-center px-3 text-[15px] font-semibold"
+              >
+                {t("orderTracking")}
+              </Link>
               <Link
                 href="/hesabim"
                 onClick={() => setMenuOpen(false)}

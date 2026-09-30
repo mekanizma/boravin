@@ -19,13 +19,16 @@ function isCdnDirect(src: string) {
   return (
     src.includes("images.unsplash.com") ||
     src.includes("picsum.photos") ||
-    src.includes("images.icecat.biz")
+    src.includes("images.icecat.biz") ||
+    /supabase\.co\/storage\/v1\/object\/public\//i.test(src)
   );
 }
 
 export type SafeImageProps = Omit<ImageProps, "onError" | "src"> & {
   src?: ImageProps["src"] | null;
+  /** Pass empty string to skip CDN fallback and surface failure instead. */
   fallbackSrc?: string;
+  onLoadError?: () => void;
 };
 
 /**
@@ -35,6 +38,7 @@ export type SafeImageProps = Omit<ImageProps, "onError" | "src"> & {
 export function SafeImage({
   src,
   fallbackSrc = FALLBACK,
+  onLoadError,
   alt,
   className,
   ...rest
@@ -61,6 +65,7 @@ export function SafeImage({
   }
 
   const cdn = typeof current === "string" && isCdnDirect(current);
+  const allowFallback = Boolean(fallbackSrc);
 
   return (
     <Image
@@ -68,10 +73,15 @@ export function SafeImage({
       alt={alt}
       src={current}
       className={className}
-      unoptimized={cdn || rest.unoptimized}
+      unoptimized={
+        cdn ||
+        rest.unoptimized ||
+        (typeof current === "string" && current.startsWith("/uploads/"))
+      }
       loading={rest.priority ? undefined : (rest.loading ?? "lazy")}
       onError={() => {
-        if (current !== fallbackSrc) {
+        onLoadError?.();
+        if (allowFallback && current !== fallbackSrc) {
           setCurrent(fallbackSrc);
           return;
         }

@@ -23,6 +23,7 @@ import {
   uploadHeroImage,
   type HeroSlide,
 } from "@/features/homepage/actions";
+import { isStoredMediaUrl } from "@/lib/media/url";
 
 type Draft = {
   id?: string;
@@ -132,6 +133,7 @@ export function HeroSlidesManager({ slides }: { slides: HeroSlide[] }) {
       toast({
         tone: "success",
         title: draft.id ? "Slayt güncellendi" : "Slayt eklendi",
+        description: "İngilizce metin otomatik hazırlandı.",
       });
       clearLocalPreview();
       setOpen(false);
@@ -366,7 +368,7 @@ export function HeroSlidesManager({ slides }: { slides: HeroSlide[] }) {
               veya görsel URL
               <Input
                 type="url"
-                value={draft.imageUrl.startsWith("/uploads/") ? "" : draft.imageUrl}
+                value={isStoredMediaUrl(draft.imageUrl) ? "" : draft.imageUrl}
                 onChange={(e) => {
                   clearLocalPreview();
                   setDraft((d) => ({ ...d, imageUrl: e.target.value }));
@@ -379,7 +381,7 @@ export function HeroSlidesManager({ slides }: { slides: HeroSlide[] }) {
                 (geniş banner); görsel kırpılmadan alana sığdırılır
               </span>
             </label>
-            {draft.imageUrl.startsWith("/uploads/") ? (
+            {isStoredMediaUrl(draft.imageUrl) ? (
               <p className="truncate text-xs text-[var(--bv-muted)]">
                 Yüklendi: {draft.imageUrl}
               </p>
@@ -418,6 +420,10 @@ export function HeroSlidesManager({ slides }: { slides: HeroSlide[] }) {
               placeholder="Kısa açıklama metni"
             />
           </label>
+          <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--bv-border)] bg-[var(--bv-fog)] px-3 py-2 text-xs text-[var(--bv-muted)]">
+            Türkçe metin kaydedilince İngilizceye otomatik çevrilir. Vitrinde TR/EN
+            dil seçimine göre ilgili metin gösterilir.
+          </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5 text-sm font-medium">
               Link (opsiyonel)
@@ -473,7 +479,7 @@ export function HeroSlidesManager({ slides }: { slides: HeroSlide[] }) {
               className="w-full sm:w-auto"
               disabled={pending || uploading}
             >
-              {pending ? "Kaydediliyor…" : "Kaydet"}
+              {pending ? "Kaydediliyor / çevriliyor…" : "Kaydet"}
             </Button>
           </div>
         </form>

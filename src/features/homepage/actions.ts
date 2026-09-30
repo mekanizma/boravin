@@ -7,6 +7,10 @@ import { db } from "@/lib/db";
 import { homepageSectionItems, homepageSections, media } from "@/lib/db/schema";
 import { requirePermission, writeAuditLog } from "@/lib/auth/rbac";
 import { storeUploadedImage } from "@/lib/barcode/import-images";
+import {
+  translateHeroCopyToEn,
+  type HeroCopyFields,
+} from "@/lib/ai/services/hero-translate";
 
 export type HeroSlide = {
   id: string;
@@ -16,6 +20,10 @@ export type HeroSlide = {
   imageUrl: string;
   linkUrl: string;
   buttonLabel: string;
+  eyebrowEn: string;
+  titleEn: string;
+  bodyEn: string;
+  buttonLabelEn: string;
   sortOrder: number;
 };
 
@@ -28,6 +36,12 @@ const DEFAULT_HERO_SLIDES = [
       "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=1600&h=900&q=80",
     linkUrl: "/urunler",
     buttonLabel: "Alışverişe başla",
+    en: {
+      eyebrow: "Ready-built systems",
+      title: "Curated systems, clear prices",
+      body: "Pre-built PCs for gaming and office. Specs listed openly, stock in store.",
+      buttonLabel: "Start shopping",
+    },
   },
   {
     eyebrow: "Notebook",
@@ -37,6 +51,12 @@ const DEFAULT_HERO_SLIDES = [
       "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1600&h=900&q=80",
     linkUrl: "/kategori/bilgisayar",
     buttonLabel: "Alışverişe başla",
+    en: {
+      eyebrow: "Notebooks",
+      title: "Gaming and work laptops on one shelf",
+      body: "Curated laptops for ASUS, Apple, and everyday use.",
+      buttonLabel: "Start shopping",
+    },
   },
   {
     eyebrow: "Kampanya",
@@ -46,6 +66,12 @@ const DEFAULT_HERO_SLIDES = [
       "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1600&h=900&q=80",
     linkUrl: "/kampanya/yaz-teknoloji",
     buttonLabel: "Alışverişe başla",
+    en: {
+      eyebrow: "Campaign",
+      title: "This week’s tech showcase",
+      body: "Discounted prices on selected items. List closes when stock runs out.",
+      buttonLabel: "Start shopping",
+    },
   },
 ] as const;
 
@@ -61,8 +87,37 @@ function revalidateHero() {
   revalidatePath("/admin/homepage");
 }
 
+function metaString(meta: Record<string, unknown>, key: string) {
+  const value = meta[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readEnFromMeta(meta: Record<string, unknown>): HeroCopyFields {
+  return {
+    eyebrow: metaString(meta, "eyebrowEn"),
+    title: metaString(meta, "titleEn"),
+    body: metaString(meta, "bodyEn"),
+    buttonLabel: metaString(meta, "buttonLabelEn"),
+  };
+}
+
+function hasEnCopy(en: HeroCopyFields) {
+  return Boolean(en.eyebrow || en.title || en.body || en.buttonLabel);
+}
+
+function heroMetaFromCopy(tr: HeroCopyFields, en: HeroCopyFields) {
+  return {
+    eyebrow: tr.eyebrow,
+    eyebrowEn: en.eyebrow,
+    titleEn: en.title,
+    bodyEn: en.body,
+    buttonLabelEn: en.buttonLabel,
+  };
+}
+
 function mapItem(row: typeof homepageSectionItems.$inferSelect): HeroSlide {
   const meta = (row.meta ?? {}) as Record<string, unknown>;
+  const en = readEnFromMeta(meta);
   const eyebrow =
     typeof meta.eyebrow === "string" && meta.eyebrow.trim()
       ? meta.eyebrow.trim()
@@ -75,8 +130,42 @@ function mapItem(row: typeof homepageSectionItems.$inferSelect): HeroSlide {
     imageUrl: row.imageUrl?.trim() || "",
     linkUrl: row.linkUrl?.trim() || "",
     buttonLabel: row.buttonLabel?.trim() || "Alışverişe başla",
+    eyebrowEn: en.eyebrow,
+    titleEn: en.title,
+    bodyEn: en.body,
+    buttonLabelEn: en.buttonLabel,
     sortOrder: row.sortOrder,
   };
+}
+
+async function buildLocalizedMeta(
+  tr: HeroCopyFields,
+  previousMeta?: Record<string, unknown> | null,
+  previousTr?: HeroCopyFields | null,
+) {
+  const prevEn = previousMeta ? readEnFromMeta(previousMeta) : null;
+  const unchanged =
+    previousTr &&
+    previousTr.eyebrow === tr.eyebrow &&
+    previousTr.title === tr.title &&
+    previousTr.body === tr.body &&
+    previousTr.buttonLabel === tr.buttonLabel;
+
+  if (unchanged && prevEn && hasEnCopy(prevEn)) {
+    return heroMetaFromCopy(tr, prevEn);
+  }
+
+  if (!tr.eyebrow && !tr.title && !tr.body && !tr.buttonLabel) {
+    return heroMetaFromCopy(tr, {
+      eyebrow: "",
+      title: "",
+      body: "",
+      buttonLabel: "",
+    });
+  }
+
+  const en = await translateHeroCopyToEn(tr);
+  return heroMetaFromCopy(tr, en);
 }
 
 async function getOrCreateHeroSection() {
@@ -161,7 +250,15 @@ export async function seedDefaultHeroSlides(): Promise<ActionResult> {
         linkUrl: slide.linkUrl,
         buttonLabel: slide.buttonLabel,
         sortOrder: index,
-        meta: { eyebrow: slide.eyebrow },
+        meta: heroMetaFromCopy(
+          {
+            eyebrow: slide.eyebrow,
+            title: slide.title,
+            body: slide.body,
+            buttonLabel: slide.buttonLabel,
+          },
+          slide.en,
+        ),
       });
     }
 
@@ -190,6 +287,7 @@ const imageUrlSchema = z
   .refine(
     (value) =>
       value.startsWith("/uploads/") ||
+      /\/storage\/v1\/object\/public\//i.test(value) ||
       /^https?:\/\//i.test(value),
     "Geçersiz görsel adresi",
   );
@@ -262,7 +360,12 @@ export async function saveHeroSlide(
     const session = await requirePermission("CONTENT_MANAGE");
     const data = slideSchema.parse(raw);
     const section = await getOrCreateHeroSection();
-    const meta = { eyebrow: data.eyebrow?.trim() || "" };
+    const tr: HeroCopyFields = {
+      eyebrow: data.eyebrow?.trim() || "",
+      title: data.title?.trim() || "",
+      body: data.body?.trim() || "",
+      buttonLabel: data.buttonLabel?.trim() || "",
+    };
 
     if (data.id) {
       const before = await db.query.homepageSectionItems.findFirst({
@@ -272,14 +375,26 @@ export async function saveHeroSlide(
         return fail("Slayt bulunamadı.");
       }
 
+      const beforeMeta = (before.meta ?? {}) as Record<string, unknown>;
+      const meta = await buildLocalizedMeta(
+        tr,
+        beforeMeta,
+        {
+          eyebrow: metaString(beforeMeta, "eyebrow"),
+          title: before.title?.trim() || "",
+          body: before.subtitle?.trim() || "",
+          buttonLabel: before.buttonLabel?.trim() || "",
+        },
+      );
+
       await db
         .update(homepageSectionItems)
         .set({
-          title: data.title?.trim() || null,
-          subtitle: data.body?.trim() || null,
+          title: tr.title || null,
+          subtitle: tr.body || null,
           imageUrl: data.imageUrl.trim(),
           linkUrl: data.linkUrl?.trim() || null,
-          buttonLabel: data.buttonLabel?.trim() || null,
+          buttonLabel: tr.buttonLabel || null,
           meta,
         })
         .where(eq(homepageSectionItems.id, data.id));
@@ -290,7 +405,7 @@ export async function saveHeroSlide(
         entityType: "homepage_section_item",
         entityId: data.id,
         before,
-        after: data,
+        after: { ...data, meta },
       });
       revalidateHero();
       return { ok: true, id: data.id };
@@ -305,15 +420,17 @@ export async function saveHeroSlide(
         ? 0
         : Math.max(...current.map((row) => row.sortOrder)) + 1;
 
+    const meta = await buildLocalizedMeta(tr);
+
     const [created] = await db
       .insert(homepageSectionItems)
       .values({
         sectionId: section.id,
-        title: data.title?.trim() || null,
-        subtitle: data.body?.trim() || null,
+        title: tr.title || null,
+        subtitle: tr.body || null,
         imageUrl: data.imageUrl.trim(),
         linkUrl: data.linkUrl?.trim() || null,
-        buttonLabel: data.buttonLabel?.trim() || null,
+        buttonLabel: tr.buttonLabel || null,
         sortOrder: nextSort,
         meta,
       })
@@ -324,7 +441,7 @@ export async function saveHeroSlide(
       action: "HOMEPAGE_HERO_CREATE",
       entityType: "homepage_section_item",
       entityId: created.id,
-      after: data,
+      after: { ...data, meta },
     });
     revalidateHero();
     return { ok: true, id: created.id };
@@ -417,7 +534,9 @@ export async function moveHeroSlide(
   }
 }
 
-/** Replace empty or legacy single Flagship seed with the current 3 slides. */
+/** Replace empty or legacy single Flagship seed with the current 3 slides.
+ * Also backfills missing English translations for existing slides.
+ */
 export async function ensureHeroSlidesReady(): Promise<HeroSlide[]> {
   const session = await requirePermission("CONTENT_MANAGE");
   void session;
@@ -432,27 +551,64 @@ export async function ensureHeroSlidesReady(): Promise<HeroSlide[]> {
   const isLegacy =
     mapped.length === 1 && mapped[0]?.title === "Flagship vitrin";
 
-  if (mapped.length > 0 && !isLegacy) return mapped;
+  if (mapped.length === 0 || isLegacy) {
+    if (isLegacy) {
+      await db
+        .delete(homepageSectionItems)
+        .where(eq(homepageSectionItems.sectionId, section.id));
+    }
 
-  if (isLegacy) {
-    await db
-      .delete(homepageSectionItems)
-      .where(eq(homepageSectionItems.sectionId, section.id));
+    for (const [index, slide] of DEFAULT_HERO_SLIDES.entries()) {
+      await db.insert(homepageSectionItems).values({
+        sectionId: section.id,
+        title: slide.title,
+        subtitle: slide.body,
+        imageUrl: slide.imageUrl,
+        linkUrl: slide.linkUrl,
+        buttonLabel: slide.buttonLabel,
+        sortOrder: index,
+        meta: heroMetaFromCopy(
+          {
+            eyebrow: slide.eyebrow,
+            title: slide.title,
+            body: slide.body,
+            buttonLabel: slide.buttonLabel,
+          },
+          slide.en,
+        ),
+      });
+    }
+
+    revalidateHero();
+    return listHeroSlidesForAdmin();
   }
 
-  for (const [index, slide] of DEFAULT_HERO_SLIDES.entries()) {
-    await db.insert(homepageSectionItems).values({
-      sectionId: section.id,
+  let changed = false;
+  for (const item of items) {
+    const slide = mapItem(item);
+    const hasTr = Boolean(slide.eyebrow || slide.title || slide.body || slide.buttonLabel);
+    if (!hasTr || hasEnCopy({
+      eyebrow: slide.eyebrowEn,
+      title: slide.titleEn,
+      body: slide.bodyEn,
+      buttonLabel: slide.buttonLabelEn,
+    })) {
+      continue;
+    }
+
+    const meta = await buildLocalizedMeta({
+      eyebrow: slide.eyebrow,
       title: slide.title,
-      subtitle: slide.body,
-      imageUrl: slide.imageUrl,
-      linkUrl: slide.linkUrl,
+      body: slide.body,
       buttonLabel: slide.buttonLabel,
-      sortOrder: index,
-      meta: { eyebrow: slide.eyebrow },
     });
+    await db
+      .update(homepageSectionItems)
+      .set({ meta })
+      .where(eq(homepageSectionItems.id, item.id));
+    changed = true;
   }
 
-  revalidateHero();
+  if (changed) revalidateHero();
   return listHeroSlidesForAdmin();
 }

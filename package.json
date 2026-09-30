@@ -30,6 +30,7 @@
     "db:clear-mock": "tsx scripts/clear-mock.ts",
     "db:tag-mock": "tsx scripts/tag-mock.ts",
     "db:studio": "drizzle-kit studio",
+    "storage:ensure": "tsx scripts/ensure-supabase-storage.ts",
     "setup:local": "tsx scripts/setup-local.ts",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"

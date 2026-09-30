@@ -692,6 +692,9 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
 
   revalidatePath("/admin/orders");
   revalidatePath("/hesabim");
+  revalidatePath("/siparis-takip");
+  revalidatePath(`/siparis-onay/${orderNumber}`);
+  revalidatePath(`/siparis-takip/${orderNumber}`);
   return {
     ok: true as const,
     orderId: order.id,

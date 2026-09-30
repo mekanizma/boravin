@@ -1,5 +1,5 @@
 # BORAVIN — Render Blueprint
-# Web + uploads disk. Veritabanı ve Auth: Supabase (Render Postgres yok).
+# Web service. Veritabanı + Auth + Storage: Supabase.
 
 services:
   - type: web
@@ -42,9 +42,10 @@ services:
           type: web
           envVarKey: RENDER_EXTERNAL_URL
       - key: STORAGE_PROVIDER
-        value: local
+        value: supabase
       - key: STORAGE_BUCKET
         value: boravin-media
+      # Legacy local uploads (old /uploads/* URLs) still served from disk if present
       - key: UPLOADS_DIR
         value: /var/data/uploads
       - key: PAYMENT_PROVIDER

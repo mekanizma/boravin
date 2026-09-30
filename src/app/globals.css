@@ -400,40 +400,11 @@ button.bv-key:hover {
 }
 
 .bv-hero-slab {
-  box-shadow:
-    0 22px 36px rgba(18, 20, 23, 0.16),
-    0 8px 0 #1c2128;
+  box-shadow: 0 12px 28px rgba(18, 20, 23, 0.12);
 }
 
 .bv-hero-band {
-  background:
-    radial-gradient(ellipse 90% 70% at 12% 0%, rgba(0, 109, 119, 0.16), transparent 55%),
-    radial-gradient(ellipse 70% 60% at 92% 18%, rgba(227, 0, 15, 0.07), transparent 50%),
-    linear-gradient(180deg, #dce5eb 0%, #e8edf1 42%, #f3f6f8 100%);
-}
-
-.bv-hero-band__glow {
-  pointer-events: none;
-  position: absolute;
-  inset: -20% 10% auto;
-  height: 70%;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(255, 255, 255, 0.55) 0%,
-    transparent 70%
-  );
-}
-
-.bv-hero-band__grid {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  opacity: 0.35;
-  background-image:
-    linear-gradient(rgba(18, 20, 23, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(18, 20, 23, 0.045) 1px, transparent 1px);
-  background-size: 28px 28px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 88%);
+  background: linear-gradient(180deg, #e4ebf0 0%, #f3f6f8 100%);
 }
 
 .bv-favorites-band {

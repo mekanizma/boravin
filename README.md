@@ -10,7 +10,7 @@ Premium, admin-öncelikli, AI destekli e-ticaret platformu. Kıbrıs teknoloji p
 - Supabase Auth (admin + müşteri kayıt/giriş) + RBAC
 - Gemini AI provider abstraction
 - Docker Compose (optional local Postgres + MinIO)
-- Render Blueprint (`render.yaml`) — production web + Postgres + uploads disk
+- Render Blueprint (`render.yaml`) — production web + Supabase Storage
 
 ## Hızlı başlangıç (Supabase)
 
@@ -39,7 +39,7 @@ npm run setup:local
 npm run dev
 ```
 
-Veritabanı proje içinde `./data/boravin` klasöründe (PGlite — gömülü Postgres). MinIO/Docker gerekmez; dosyalar `public/uploads` altına yazılır.
+Veritabanı proje içinde `./data/boravin` klasöründe (PGlite — gömülü Postgres). Görseller production’da Supabase Storage’a (`STORAGE_PROVIDER=supabase`, bucket `boravin-media`) yazılır; lokal geliştirmede `STORAGE_PROVIDER=local` ile `public/uploads` kullanılabilir.
 
 ### İsteğe bağlı: gerçek PostgreSQL / Docker
 

@@ -16,6 +16,7 @@ import {
   localizeCategoryTitle,
   localizeHomeCopy,
 } from "@/lib/i18n/localize-content";
+import type { AppLocale } from "@/i18n/config";
 
 export type HomepageSectionItem = {
   id: string;
@@ -373,21 +374,36 @@ function productsFromSection(section: HomepageSection): ProductCardData[] {
   );
 }
 
-function heroSlidesFromSection(section?: HomepageSection): HeroSliderSlide[] {
+function metaText(meta: Record<string, unknown> | null | undefined, key: string) {
+  const value = meta?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function heroSlidesFromSection(
+  section: HomepageSection | undefined,
+  locale: AppLocale,
+): HeroSliderSlide[] {
   if (!section?.items?.length) return [];
   return section.items
     .filter((item) => item.imageUrl)
     .map((item) => {
-      const eyebrow =
-        typeof item.meta?.eyebrow === "string" ? item.meta.eyebrow.trim() : "";
+      const meta = item.meta ?? {};
+      const eyebrowTr = metaText(meta, "eyebrow");
+      const titleTr = item.title?.trim() || "";
+      const bodyTr = item.subtitle?.trim() || "";
+      const buttonTr = item.buttonLabel?.trim() || "";
+      const useEn = locale === "en";
+
       return {
         id: item.id,
-        eyebrow,
-        title: item.title?.trim() || "",
-        body: item.subtitle?.trim() || "",
+        eyebrow: useEn ? metaText(meta, "eyebrowEn") || eyebrowTr : eyebrowTr,
+        title: useEn ? metaText(meta, "titleEn") || titleTr : titleTr,
+        body: useEn ? metaText(meta, "bodyEn") || bodyTr : bodyTr,
         imageUrl: item.imageUrl || "",
         linkUrl: item.linkUrl?.trim() || "",
-        buttonLabel: item.buttonLabel || undefined,
+        buttonLabel: useEn
+          ? metaText(meta, "buttonLabelEn") || buttonTr || undefined
+          : buttonTr || undefined,
       };
     })
     .filter((slide) => slide.imageUrl);
@@ -448,7 +464,7 @@ export async function HomepageSections({
     ? productsFromSection(productSections[0])
     : pool;
   const second = productSections[1] ? productsFromSection(productSections[1]) : pool.slice(4);
-  const heroSlides = heroSlidesFromSection(hero);
+  const heroSlides = heroSlidesFromSection(hero, locale);
 
   return (
     <>

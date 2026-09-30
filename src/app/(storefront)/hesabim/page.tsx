@@ -14,13 +14,9 @@ export async function generateMetadata() {
   return { title: t("metadataTitle") };
 }
 
-export default async function AccountPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ order?: string }>;
-}) {
+export default async function AccountPage() {
   const t = await getTranslations("Account");
-  const sp = await searchParams;
+  const tOrders = await getTranslations("Orders");
   const customer = await getCurrentCustomer();
 
   if (!customer) {
@@ -57,13 +53,14 @@ export default async function AccountPage({
           <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-[#111]">
             {name || t("fallbackTitle")}
           </h1>
-          {sp.order ? (
-            <p className="mt-4 border border-[var(--bv-success)]/30 bg-[#f4fbf6] px-3 py-3 text-sm text-[var(--bv-success)]">
-              {t("orderReceived", { order: sp.order })}
-            </p>
-          ) : null}
           <p className="mt-3 text-sm text-[#6b7280]">{customer.email}</p>
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
+            <Link
+              href="/siparis-takip"
+              className="inline-flex h-12 items-center justify-center border border-[#d7dee3] text-sm font-semibold text-[#111]"
+            >
+              {tOrders("trackOrders")}
+            </Link>
             <Link
               href="/favoriler"
               className="inline-flex h-12 items-center justify-center border border-[#d7dee3] text-sm font-semibold text-[#111]"
@@ -72,7 +69,7 @@ export default async function AccountPage({
             </Link>
             <Link
               href="/urunler"
-              className="inline-flex h-12 items-center justify-center bg-[var(--bv-teal)] text-sm font-semibold text-white"
+              className="inline-flex h-12 items-center justify-center bg-[var(--bv-teal)] text-sm font-semibold text-white sm:col-span-2"
             >
               {t("continueShopping")}
             </Link>
