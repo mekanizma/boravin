@@ -164,7 +164,7 @@ export function NewProductForm({
     try {
       const result = await Promise.race([
         lookupBarcodeAction(digits),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 16000)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 22000)),
       ]);
       if (requestId !== requestRef.current) return;
       if (!result) {

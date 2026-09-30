@@ -5,6 +5,7 @@ import {
   isSafePublicImageUrl,
   mapIcecatProduct,
   mapOpenFactsProduct,
+  mapUpcitemdbHtmlPage,
   mapUpcitemdbProduct,
   mapWebSearchProduct,
   matchCategoryId,
@@ -138,6 +139,26 @@ describe("mapUpcitemdbProduct", () => {
     expect(isAllowedProductImageUrl("https://images10.newegg.com/ProductImage/front.jpg")).toBe(
       true,
     );
+  });
+});
+
+describe("mapUpcitemdbHtmlPage", () => {
+  it("extracts title and retail CDN images from the public HTML page", () => {
+    const html = `
+      <html><head><title>UPC 195950087383 - Apple iPad (A16) 11-inch Wi-Fi 256GB - Blue | upcitemdb.com</title></head>
+      <body>
+        <img src="https://target.scene7.com/is/image/Target/GUEST_abc?wid=1000&amp;hei=1000" />
+        <img src="https://i5.walmartimages.com/asr/pad.jpeg?odnHeight=450" />
+        <img src="https://pisces.bbystatic.com/image2/BestBuy_US/images/products/pad.jpg" />
+        <img src="https://www.upcitemdb.com/barcode/ean13/0195950087383.png" />
+      </body></html>`;
+    const draft = mapUpcitemdbHtmlPage(html, "195950087383");
+    expect(draft?.source).toBe("upcitemdb");
+    expect(draft?.name).toContain("Apple iPad");
+    expect(draft?.brand).toBe("Apple");
+    expect(draft?.imageUrls.length).toBeGreaterThanOrEqual(3);
+    expect(draft?.imageUrls.some((u) => u.includes("target.scene7.com"))).toBe(true);
+    expect(draft?.imageUrls.some((u) => u.includes("barcode/ean"))).toBe(false);
   });
 });
 

@@ -386,6 +386,61 @@ export function mapUpcitemdbProduct(payload: unknown, barcode: string): ProductD
   });
 }
 
+/**
+ * Parse the public upcitemdb.com HTML page when the JSON API is rate-limited
+ * or unavailable (common on free trial keys).
+ */
+export function mapUpcitemdbHtmlPage(html: string, barcode: string): ProductDraft | null {
+  const titleMatch =
+    html.match(/<title[^>]*>\s*UPC\s+\d+\s*-\s*([^|<]+?)\s*(?:\||<\/title>)/i) ||
+    html.match(/UPC\s+\d+\s*-\s*([^|<]+?)(?:\s*\|\s*upcitemdb)?/i);
+  const title = (titleMatch?.[1] ?? "").replace(/\s+/g, " ").trim();
+  if (!title || /^upcitemdb$/i.test(title)) return null;
+
+  const imageUrls: string[] = [];
+  const urlRe = /https:\/\/[^"'\\\s<>]+/gi;
+  let match: RegExpExecArray | null;
+  while ((match = urlRe.exec(html)) !== null) {
+    const raw = match[0].replace(/&amp;/g, "&").replace(/[),.;]+$/, "");
+    if (/barcode\/ean|doubleclick|googlesyndication|adsystem|favicon|1x1|pixel|sprite|logo/i.test(raw)) {
+      continue;
+    }
+    const looksLikeImage =
+      /\.(jpe?g|png|webp|gif)(\?|$)/i.test(raw) ||
+      /scene7\.com|walmartimages|bbystatic|media-amazon|ssl-images-amazon|neweggimages|cloudinary/i.test(
+        raw,
+      );
+    if (!looksLikeImage) continue;
+    if (!isAllowedProductImageUrl(raw) && !isSafePublicImageUrl(raw)) continue;
+    if (imageUrls.includes(raw)) continue;
+    imageUrls.push(raw);
+    if (imageUrls.length >= 8) break;
+  }
+
+  const brandFromHtml =
+    html.match(/>\s*Brand\s*<[\s\S]{0,120}?>([A-Za-z][A-Za-z0-9 .&-]{1,40})</i)?.[1]?.trim() ||
+    "";
+  const brandFromTitle = title.split(/\s+/)[0] || "";
+  const brand =
+    brandFromHtml && !/^(td|th|tr|span|div|label|a|p|li)$/i.test(brandFromHtml)
+      ? brandFromHtml
+      : brandFromTitle;
+
+  return mapUpcitemdbProduct(
+    {
+      code: "OK",
+      items: [
+        {
+          title,
+          brand,
+          images: imageUrls,
+        },
+      ],
+    },
+    barcode,
+  );
+}
+
 type OpenFactsProduct = {
   product_name?: string;
   product_name_tr?: string;

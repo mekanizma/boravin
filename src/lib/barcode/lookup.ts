@@ -4,6 +4,7 @@ import {
   barcodeCandidates,
   mapIcecatProduct,
   mapOpenFactsProduct,
+  mapUpcitemdbHtmlPage,
   mapUpcitemdbProduct,
 } from "@/lib/barcode/parse";
 import type { ProductDraft } from "@/lib/barcode/types";
@@ -90,7 +91,38 @@ async function fetchUpcitemdb(code: string): Promise<unknown | null> {
       },
       cache: "no-store",
     });
+    if (!response.ok) return null;
     return (await response.json().catch(() => null)) as unknown;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Public HTML page — works when the JSON trial API returns 429. */
+async function scrapeUpcitemdbPage(
+  code: string,
+  barcode: string,
+): Promise<ProductDraft | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 7000);
+  try {
+    const response = await fetch(
+      `https://www.upcitemdb.com/upc/${encodeURIComponent(code)}`,
+      {
+        signal: controller.signal,
+        headers: {
+          Accept: "text/html,application/xhtml+xml",
+          "User-Agent": USER_AGENT,
+        },
+        redirect: "follow",
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) return null;
+    const html = await response.text();
+    return mapUpcitemdbHtmlPage(html, barcode);
   } catch {
     return null;
   } finally {
@@ -194,11 +226,11 @@ export async function lookupBarcodeExternal(barcode: string): Promise<ExternalLo
       }),
       firstDraft(codes, async (code) => {
         const payload = await fetchUpcitemdb(code);
-        if (payload == null) return { draft: null, networkError: true };
-        return {
-          draft: mapUpcitemdbProduct(payload, barcode),
-          networkError: false,
-        };
+        const fromApi = payload ? mapUpcitemdbProduct(payload, barcode) : null;
+        if (fromApi) return { draft: fromApi, networkError: false };
+        const fromHtml = await scrapeUpcitemdbPage(code, barcode);
+        if (fromHtml) return { draft: fromHtml, networkError: false };
+        return { draft: null, networkError: payload == null };
       }),
       lookupOpenFacts("world.openproductsfacts.org", "openproductsfacts", codes, barcode),
       lookupOpenFacts("world.openfoodfacts.org", "openfoodfacts", codes, barcode),
