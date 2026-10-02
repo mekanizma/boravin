@@ -29,10 +29,20 @@ export async function POST(request: Request) {
     if (!result.ok) {
       const err = result.error;
       if (err.error === "PRODUCT_NOT_FOUND") {
+        const suggestions =
+          "suggestions" in err && Array.isArray(err.suggestions)
+            ? err.suggestions
+            : [];
+        const hint =
+          suggestions.length > 0
+            ? ` Önerilen SKU’lar: ${suggestions
+                .map((s) => `${s.name} (${s.sku})`)
+                .join(", ")}.`
+            : " Önce GET /api/v1/products/search?q=... ile ürünü bulun ve dönen sku alanını kullanın.";
         return jsonError(
           "PRODUCT_NOT_FOUND",
-          `Ürün bulunamadı: ${err.sku}. Arama sonucundaki sku alanını kullanın.`,
-          404,
+          `Ürün bulunamadı: ${err.sku}.${hint}`,
+          422,
           err,
         );
       }

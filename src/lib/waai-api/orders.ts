@@ -74,6 +74,7 @@ type ResolveError = {
   error: "PRODUCT_NOT_FOUND" | "INSUFFICIENT_STOCK";
   sku: string;
   available?: number;
+  suggestions?: Array<{ sku: string; name: string }>;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -244,55 +245,143 @@ async function resolveProductByIdentity(normalized: string) {
         eq(products.sku, normalized),
         eq(products.barcode, normalized),
         eq(products.slug, normalized),
+        ilike(products.sku, normalized),
+        ilike(products.slug, normalized),
       ),
     ),
   });
 }
 
+function normalizeProductQuery(value: string) {
+  return value
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9ğüşıöç\s+-]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function significantTokens(value: string) {
+  const stop = new Set([
+    "ve",
+    "ile",
+    "for",
+    "the",
+    "adet",
+    "urun",
+    "ürün",
+    "model",
+  ]);
+  return normalizeProductQuery(value)
+    .split(" ")
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2 && !stop.has(t));
+}
+
 async function resolveProductByName(normalized: string) {
+  const query = normalized.trim();
+  if (!query) return null;
+
   const exact = await db
     .select()
     .from(products)
     .where(
       and(
         eq(products.status, "active"),
-        sql`lower(${products.name}) = lower(${normalized})`,
+        sql`lower(${products.name}) = lower(${query})`,
       ),
     )
-    .limit(2);
+    .orderBy(desc(products.soldCount), desc(products.isFeatured))
+    .limit(1);
 
-  if (exact.length === 1) return exact[0];
-  if (exact.length > 1) return null;
+  if (exact[0]) return exact[0];
 
-  const pattern = `%${normalized}%`;
+  const tokens = significantTokens(query);
+  const pattern = `%${query}%`;
+  const tokenPatterns =
+    tokens.length > 0
+      ? tokens.map((token) => ilike(products.name, `%${token}%`))
+      : [];
+
   const fuzzy = await db
     .select()
     .from(products)
-    .where(and(eq(products.status, "active"), ilike(products.name, pattern)))
+    .where(
+      and(
+        eq(products.status, "active"),
+        or(
+          ilike(products.name, pattern),
+          ilike(products.slug, pattern),
+          ilike(products.sku, pattern),
+          ilike(products.shortDescription, pattern),
+          // Any significant token — ranking picks the best overlap.
+          ...tokenPatterns,
+        ),
+      ),
+    )
     .orderBy(desc(products.soldCount), desc(products.isFeatured))
-    .limit(5);
+    .limit(12);
 
+  if (fuzzy.length === 0) return null;
   if (fuzzy.length === 1) return fuzzy[0];
 
-  // Prefer the shortest name that still contains the query (e.g. "iPhone 16 Pro"
-  // over "iPhone 16 Pro Max" when both match).
+  const normalizedQuery = normalizeProductQuery(query);
   const ranked = fuzzy
-    .map((row) => ({
-      row,
-      score: Math.abs(row.name.length - normalized.length),
-    }))
-    .sort((a, b) => a.score - b.score);
+    .map((row) => {
+      const name = normalizeProductQuery(row.name);
+      const tokenHits = tokens.filter((t) => name.includes(t)).length;
+      const exactish = name === normalizedQuery ? 100 : 0;
+      const starts = name.startsWith(normalizedQuery) ? 40 : 0;
+      const contains = name.includes(normalizedQuery) ? 25 : 0;
+      // Prefer products that cover most of the query tokens (ignore color/storage extras).
+      const coverage =
+        tokens.length > 0 ? (tokenHits / tokens.length) * 50 : 0;
+      const lengthPenalty = Math.abs(name.length - normalizedQuery.length);
+      return {
+        row,
+        score:
+          exactish + starts + contains + tokenHits * 20 + coverage - lengthPenalty,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
 
-  if (
-    ranked.length >= 2 &&
-    ranked[0] &&
-    ranked[1] &&
-    ranked[0].score < ranked[1].score
-  ) {
-    return ranked[0].row;
-  }
+  const best = ranked[0];
+  // At least 2 token hits or a strong substring match.
+  if (!best) return null;
+  const tokenHits = tokens.filter((t) =>
+    normalizeProductQuery(best.row.name).includes(t),
+  ).length;
+  if (best.score < 20 && tokenHits < 2) return null;
+  return best.row;
+}
 
-  return ranked[0]?.row ?? null;
+async function suggestProducts(query: string, limit = 5) {
+  const q = query.trim();
+  if (!q) return [] as Array<{ sku: string; name: string }>;
+  const pattern = `%${q}%`;
+  const tokens = significantTokens(q);
+  const rows = await db
+    .select({
+      sku: products.sku,
+      name: products.name,
+    })
+    .from(products)
+    .where(
+      and(
+        eq(products.status, "active"),
+        or(
+          ilike(products.name, pattern),
+          ilike(products.sku, pattern),
+          ...(tokens.length
+            ? tokens.map((token) => ilike(products.name, `%${token}%`))
+            : []),
+        ),
+      ),
+    )
+    .orderBy(desc(products.soldCount), desc(products.isFeatured))
+    .limit(limit);
+  return rows;
 }
 
 async function resolveFromProduct(
@@ -451,7 +540,8 @@ async function resolveLine(
     return resolveFromProduct(byName, quantity, sku, preferredOptions);
   }
 
-  return { error: "PRODUCT_NOT_FOUND", sku };
+  const suggestions = await suggestProducts(normalized);
+  return { error: "PRODUCT_NOT_FOUND", sku, suggestions };
 }
 
 function pickShippingMethod(
