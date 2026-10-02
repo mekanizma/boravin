@@ -16,7 +16,11 @@ export async function GET(request: Request, context: RouteContext) {
     decodeURIComponent(trackingNumber),
   );
   if (!shipping) {
-    return jsonError("SHIPPING_NOT_FOUND", "Kargo kaydı bulunamadı.", 404);
+    return jsonError(
+      "SHIPPING_NOT_FOUND",
+      "Kargo veya sipariş bulunamadı. Takip numarasını veya sipariş numarasını (WA…) doğru girin; admin panelde takip no kayıtlı olmalı.",
+      404,
+    );
   }
 
   return jsonOk(shipping);

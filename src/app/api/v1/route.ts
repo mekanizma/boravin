@@ -24,6 +24,10 @@ export async function GET(request: Request) {
       createOrder: "POST /api/v1/orders",
       orderDetail: "GET /api/v1/orders/{orderNumber}",
       shipping: "GET /api/v1/shipping/{trackingNumber}",
+      shippingHint:
+        "Takip no VEYA sipariş no (WA…) kabul eder. Admin panelde kargo takip no girilmezse boş dönebilir.",
+      orderStatusNotify:
+        "Admin durum değişince WhatsApp bildirimi: WHATSAPP_NOTIFY_WEBHOOK_URL veya Meta WHATSAPP_ACCESS_TOKEN + WHATSAPP_PHONE_NUMBER_ID",
     },
     createOrderHints: {
       rule: "WhatsApp siparişinde mutlaka ad soyad, telefon, açık adres ve şehir isteyin. E-posta varsa alın, zorunlu değil. Varyantlı üründe renk/depolama seçtirip variants[].sku kullanın. Eksik zorunlu bilgiyle sipariş oluşturulmaz.",

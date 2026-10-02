@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-import { updateOrderStatus } from "@/features/orders/actions";
+import {
+  updateOrderStatus,
+  updateOrderTracking,
+} from "@/features/orders/actions";
 import {
   ORDER_FLOW,
   ORDER_STATUS_LABELS,
@@ -44,6 +47,8 @@ export function OrderStatusManager({
   const [confirmCancel, setConfirmCancel] = React.useState(false);
 
   const next = allowedNextStatuses(status);
+  const showTrackingFields =
+    next.includes("shipped") || status === "shipped" || status === "delivered";
   const flowIndex = (() => {
     if (status === "awaiting_payment") return 0;
     const idx = ORDER_FLOW.indexOf(status as OrderStatus);
@@ -90,19 +95,57 @@ export function OrderStatusManager({
     }
   }
 
+  async function saveTracking() {
+    if (!tracking.trim()) {
+      toast({
+        tone: "error",
+        title: "Takip numarası gerekli",
+        description: "WhatsApp sorgusu için takip no girin.",
+      });
+      return;
+    }
+    setPending(true);
+    try {
+      const result = await updateOrderTracking({
+        orderId,
+        trackingNumber: tracking,
+        shippingCarrier: carrier || null,
+      });
+      if (!result.ok) {
+        toast({ tone: "error", title: "Takip kaydedilemedi" });
+        return;
+      }
+      toast({
+        tone: "success",
+        title: "Takip numarası kaydedildi",
+        description: "Müşteri WhatsApp’tan sorgulayabilir.",
+      });
+      router.refresh();
+    } catch {
+      toast({ tone: "error", title: "Takip kaydedilemedi" });
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <div className="space-y-4 rounded-[var(--radius-lg)] border border-[var(--bv-border)] bg-white p-4 sm:p-5">
       <div>
         <h2 className="text-sm font-semibold tracking-wide">Sipariş yönetimi</h2>
         <p className="mt-1 text-sm text-[var(--bv-muted)]">
-          Güncel: <strong className="text-[var(--bv-ink)]">{orderStatusLabel(status)}</strong>
+          Güncel:{" "}
+          <strong className="text-[var(--bv-ink)]">
+            {orderStatusLabel(status)}
+          </strong>
         </p>
       </div>
 
       <ol className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {ORDER_FLOW.map((step, index) => {
           const done = flowIndex > index;
-          const current = flowIndex === index || (status === "awaiting_payment" && index === 0);
+          const current =
+            flowIndex === index ||
+            (status === "awaiting_payment" && index === 0);
           return (
             <li
               key={step}
@@ -121,20 +164,33 @@ export function OrderStatusManager({
         })}
       </ol>
 
-      {next.includes("shipped") ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Input
-            label="Kargo firması"
-            value={carrier}
-            onChange={(e) => setCarrier(e.target.value)}
-            placeholder="Yurtiçi, MNG…"
-          />
-          <Input
-            label="Takip numarası"
-            value={tracking}
-            onChange={(e) => setTracking(e.target.value)}
-            placeholder="Opsiyonel"
-          />
+      {showTrackingFields ? (
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              label="Kargo firması"
+              value={carrier}
+              onChange={(e) => setCarrier(e.target.value)}
+              placeholder="Yurtiçi, MNG…"
+            />
+            <Input
+              label="Takip numarası"
+              value={tracking}
+              onChange={(e) => setTracking(e.target.value)}
+              placeholder="WhatsApp sorgusu için girin"
+            />
+          </div>
+          {(status === "shipped" || status === "delivered") && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              disabled={pending}
+              onClick={() => void saveTracking()}
+            >
+              Takip numarasını kaydet
+            </Button>
+          )}
         </div>
       ) : null}
 
