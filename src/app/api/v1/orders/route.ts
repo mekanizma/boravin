@@ -6,6 +6,13 @@ import { createWaaiOrder } from "@/lib/waai-api/orders";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function zodMessage(error: ZodError) {
+  const first = error.issues[0];
+  if (!first) return "Sipariş verisi geçersiz.";
+  const path = first.path.length ? first.path.join(".") : "body";
+  return `${path}: ${first.message}`;
+}
+
 export async function POST(request: Request) {
   const auth = requireWaaiAuth(request);
   if (!auth.ok) return auth.response;
@@ -24,15 +31,21 @@ export async function POST(request: Request) {
       if (err.error === "PRODUCT_NOT_FOUND") {
         return jsonError(
           "PRODUCT_NOT_FOUND",
-          `SKU bulunamadı: ${err.sku}`,
+          `Ürün bulunamadı: ${err.sku}. Arama sonucundaki sku alanını kullanın.`,
           404,
           err,
         );
       }
       if (err.error === "INSUFFICIENT_STOCK") {
+        const available =
+          "available" in err && typeof err.available === "number"
+            ? err.available
+            : undefined;
         return jsonError(
           "INSUFFICIENT_STOCK",
-          `Yetersiz stok: ${err.sku}`,
+          `Yetersiz stok: ${err.sku}${
+            available != null ? ` (mevcut: ${available})` : ""
+          }`,
           409,
           err,
         );
@@ -48,7 +61,7 @@ export async function POST(request: Request) {
     return jsonOk(result.order, { status: 201 });
   } catch (error) {
     if (error instanceof ZodError) {
-      return jsonError("VALIDATION_ERROR", "Sipariş verisi geçersiz.", 400, {
+      return jsonError("VALIDATION_ERROR", zodMessage(error), 400, {
         issues: error.issues,
       });
     }

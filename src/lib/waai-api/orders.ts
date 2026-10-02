@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   customers,
@@ -14,14 +14,31 @@ import { applyStockChange, StockError } from "@/lib/stock/apply";
 import { orderStatusLabel } from "@/lib/orders/status";
 import { serializeOrder } from "@/lib/waai-api/serialize";
 
+/** WhatsApp siparişlerinde adres + iletişim her zaman zorunlu. */
 export const createOrderSchema = z.object({
+  fulfillment: z.enum(["delivery", "pickup"]).default("delivery"),
   customer: z.object({
-    fullName: z.string().min(2),
-    phone: z.string().min(7),
-    email: z.string().email().optional(),
-    line1: z.string().min(3),
+    fullName: z
+      .string()
+      .trim()
+      .min(2, "Müşteriden ad soyad isteyin (en az 2 karakter)."),
+    phone: z
+      .string()
+      .trim()
+      .min(7, "Müşteriden telefon numarası isteyin."),
+    email: z
+      .union([z.string().email(), z.literal("")])
+      .optional()
+      .transform((v) => (v && v.trim() ? v.trim().toLowerCase() : undefined)),
+    line1: z
+      .string()
+      .trim()
+      .min(3, "Müşteriden açık adres isteyin (cadde/sokak, no)."),
     line2: z.string().optional(),
-    city: z.string().min(2),
+    city: z
+      .string()
+      .trim()
+      .min(2, "Müşteriden şehir / bölge isteyin (örn. Girne)."),
     district: z.string().optional(),
     postalCode: z.string().optional(),
     country: z.string().default("CY"),
@@ -41,21 +58,294 @@ export const createOrderSchema = z.object({
   customerNote: z.string().max(2000).optional(),
   markPaid: z.boolean().optional(),
 });
+type ResolvedLine = {
+  productId: string;
+  variantId: string | null;
+  productName: string;
+  variantName: string | null;
+  sku: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+};
 
-async function resolveLine(sku: string, quantity: number): Promise<
-  | {
-      productId: string;
-      variantId: string | null;
-      productName: string;
-      variantName: string | null;
-      sku: string;
-      quantity: number;
-      unitPrice: number;
-      taxRate: number;
+type ResolveError = {
+  error: "PRODUCT_NOT_FOUND" | "INSUFFICIENT_STOCK";
+  sku: string;
+  available?: number;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return undefined;
+}
+
+function readQuantity(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+}
+
+/** Accept common Waai / flat payloads before Zod validation. */
+export function normalizeWaaiOrderPayload(raw: unknown): unknown {
+  const root = asRecord(raw);
+  if (!root) return raw;
+
+  const customerIn = asRecord(root.customer) ?? root;
+  const fullName = readString(
+    customerIn.fullName,
+    customerIn.name,
+    customerIn.customerName,
+    root.fullName,
+    root.name,
+  );
+  const phone = readString(
+    customerIn.phone,
+    customerIn.phoneNumber,
+    customerIn.tel,
+    root.phone,
+    root.phoneNumber,
+  );
+  const email = readString(customerIn.email, root.email);
+  const line1 = readString(
+    customerIn.line1,
+    customerIn.address,
+    customerIn.addressLine1,
+    customerIn.street,
+    root.line1,
+    root.address,
+  );
+  const line2 = readString(customerIn.line2, customerIn.addressLine2);
+  const city = readString(customerIn.city, customerIn.town, root.city);
+  const district = readString(customerIn.district, customerIn.region);
+  const postalCode = readString(customerIn.postalCode, customerIn.zip);
+  const country = readString(customerIn.country, root.country) ?? "CY";
+
+  const fulfillmentRaw = readString(
+    root.fulfillment,
+    root.deliveryType,
+    root.shippingType,
+  )?.toLowerCase();
+  const noteHint = readString(root.customerNote, root.note)?.toLowerCase() ?? "";
+  const pickupHint =
+    fulfillmentRaw === "pickup" ||
+    fulfillmentRaw === "magaza" ||
+    fulfillmentRaw === "mağaza" ||
+    fulfillmentRaw === "store" ||
+    noteHint.includes("mağaza") ||
+    noteHint.includes("magaza") ||
+    noteHint.includes("pickup") ||
+    noteHint.includes("teslim al");
+
+  const itemsRaw = Array.isArray(root.items)
+    ? root.items
+    : Array.isArray(root.products)
+      ? root.products
+      : null;
+
+  const items =
+    itemsRaw?.map((item) => {
+      const row = asRecord(item) ?? {};
+      const sku =
+        readString(row.sku, row.productSku, row.variantSku, row.name, row.productName) ??
+        "";
+      return { sku, quantity: readQuantity(row.quantity ?? row.qty) };
+    }) ?? undefined;
+
+  // Single-item shortcuts from Waai tools
+  const singleSku = readString(
+    root.sku,
+    root.productSku,
+    root.productName,
+    root.product,
+  );
+  const normalizedItems =
+    items && items.length > 0
+      ? items
+      : singleSku
+        ? [{ sku: singleSku, quantity: readQuantity(root.quantity ?? root.qty) }]
+        : undefined;
+
+  let fulfillment: "delivery" | "pickup" = "delivery";
+  if (
+    fulfillmentRaw === "pickup" ||
+    fulfillmentRaw === "magaza" ||
+    fulfillmentRaw === "mağaza" ||
+    fulfillmentRaw === "store" ||
+    pickupHint
+  ) {
+    fulfillment = "pickup";
+  }
+
+  return {
+    fulfillment,
+    customer: {
+      fullName: fullName ?? "",
+      phone: phone ?? "",
+      ...(email ? { email } : {}),
+      line1: line1 ?? "",
+      ...(line2 ? { line2 } : {}),
+      city: city ?? "",
+      ...(district ? { district } : {}),
+      ...(postalCode ? { postalCode } : {}),
+      country,
+    },
+    ...(normalizedItems ? { items: normalizedItems } : {}),
+    paymentMethod: root.paymentMethod ?? "whatsapp",
+    ...(readString(root.customerNote, root.note)
+      ? { customerNote: readString(root.customerNote, root.note) }
+      : {}),
+    ...(typeof root.markPaid === "boolean" ? { markPaid: root.markPaid } : {}),
+  };
+}
+
+async function resolveProductByIdentity(normalized: string) {
+  return db.query.products.findFirst({
+    where: and(
+      eq(products.status, "active"),
+      or(
+        eq(products.sku, normalized),
+        eq(products.barcode, normalized),
+        eq(products.slug, normalized),
+      ),
+    ),
+  });
+}
+
+async function resolveProductByName(normalized: string) {
+  const exact = await db
+    .select()
+    .from(products)
+    .where(
+      and(
+        eq(products.status, "active"),
+        sql`lower(${products.name}) = lower(${normalized})`,
+      ),
+    )
+    .limit(2);
+
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return null;
+
+  const pattern = `%${normalized}%`;
+  const fuzzy = await db
+    .select()
+    .from(products)
+    .where(and(eq(products.status, "active"), ilike(products.name, pattern)))
+    .orderBy(desc(products.soldCount), desc(products.isFeatured))
+    .limit(5);
+
+  if (fuzzy.length === 1) return fuzzy[0];
+
+  // Prefer the shortest name that still contains the query (e.g. "iPhone 16 Pro"
+  // over "iPhone 16 Pro Max" when both match).
+  const ranked = fuzzy
+    .map((row) => ({
+      row,
+      score: Math.abs(row.name.length - normalized.length),
+    }))
+    .sort((a, b) => a.score - b.score);
+
+  if (
+    ranked.length >= 2 &&
+    ranked[0] &&
+    ranked[1] &&
+    ranked[0].score < ranked[1].score
+  ) {
+    return ranked[0].row;
+  }
+
+  return ranked[0]?.row ?? null;
+}
+
+async function resolveFromProduct(
+  product: typeof products.$inferSelect,
+  quantity: number,
+  requestedSku: string,
+): Promise<ResolvedLine | ResolveError> {
+  const variants = await db.query.productVariants.findMany({
+    where: and(
+      eq(productVariants.productId, product.id),
+      eq(productVariants.isActive, true),
+    ),
+  });
+
+  if (variants.length > 0) {
+    const withStock = variants.find((v) => v.stock >= quantity);
+    if (withStock) {
+      const unitPrice =
+        withStock.price != null ? Number(withStock.price) : Number(product.price);
+      return {
+        productId: product.id,
+        variantId: withStock.id,
+        productName: product.name,
+        variantName: withStock.name,
+        sku: withStock.sku,
+        quantity,
+        unitPrice,
+        taxRate: Number(product.taxRate ?? 0),
+      };
     }
-  | { error: "PRODUCT_NOT_FOUND" | "INSUFFICIENT_STOCK"; sku: string; available?: number }
-> {
+
+    if (product.stock >= quantity) {
+      return {
+        productId: product.id,
+        variantId: null,
+        productName: product.name,
+        variantName: null,
+        sku: product.sku,
+        quantity,
+        unitPrice: Number(product.price),
+        taxRate: Number(product.taxRate ?? 0),
+      };
+    }
+
+    const available = Math.max(
+      product.stock,
+      ...variants.map((v) => v.stock),
+    );
+    return {
+      error: "INSUFFICIENT_STOCK",
+      sku: requestedSku,
+      available,
+    };
+  }
+
+  if (product.stock < quantity) {
+    return {
+      error: "INSUFFICIENT_STOCK",
+      sku: requestedSku,
+      available: product.stock,
+    };
+  }
+
+  return {
+    productId: product.id,
+    variantId: null,
+    productName: product.name,
+    variantName: null,
+    sku: product.sku,
+    quantity,
+    unitPrice: Number(product.price),
+    taxRate: Number(product.taxRate ?? 0),
+  };
+}
+
+async function resolveLine(
+  sku: string,
+  quantity: number,
+): Promise<ResolvedLine | ResolveError> {
   const normalized = sku.trim();
+  if (!normalized) return { error: "PRODUCT_NOT_FOUND", sku };
+
   const variant = await db.query.productVariants.findFirst({
     where: and(
       eq(productVariants.sku, normalized),
@@ -70,10 +360,10 @@ async function resolveLine(sku: string, quantity: number): Promise<
         eq(products.status, "active"),
       ),
     });
-    if (!product) return { error: "PRODUCT_NOT_FOUND" as const, sku };
+    if (!product) return { error: "PRODUCT_NOT_FOUND", sku };
     if (variant.stock < quantity) {
       return {
-        error: "INSUFFICIENT_STOCK" as const,
+        error: "INSUFFICIENT_STOCK",
         sku,
         available: variant.stock,
       };
@@ -92,49 +382,38 @@ async function resolveLine(sku: string, quantity: number): Promise<
     };
   }
 
-  const product = await db.query.products.findFirst({
-    where: and(
-      eq(products.status, "active"),
-      or(
-        eq(products.sku, normalized),
-        eq(products.barcode, normalized),
-        eq(products.slug, normalized),
-      ),
-    ),
-  });
-  if (!product) return { error: "PRODUCT_NOT_FOUND" as const, sku };
-  if (product.stock < quantity) {
-    return {
-      error: "INSUFFICIENT_STOCK" as const,
-      sku,
-      available: product.stock,
-    };
-  }
+  const byIdentity = await resolveProductByIdentity(normalized);
+  if (byIdentity) return resolveFromProduct(byIdentity, quantity, sku);
 
-  return {
-    productId: product.id,
-    variantId: null as string | null,
-    productName: product.name,
-    variantName: null as string | null,
-    sku: product.sku,
-    quantity,
-    unitPrice: Number(product.price),
-    taxRate: Number(product.taxRate ?? 0),
-  };
+  const byName = await resolveProductByName(normalized);
+  if (byName) return resolveFromProduct(byName, quantity, sku);
+
+  return { error: "PRODUCT_NOT_FOUND", sku };
+}
+
+function pickShippingMethod(
+  methods: Array<typeof shippingMethods.$inferSelect>,
+  fulfillment: "delivery" | "pickup",
+) {
+  if (fulfillment === "pickup") {
+    const pickup =
+      methods.find((m) => /store|mağaza|magaza|pickup|teslim/i.test(m.name)) ??
+      methods.find((m) => /store|pickup/i.test(m.carrier ?? "")) ??
+      methods.find((m) => Number(m.price) === 0);
+    return pickup ?? null;
+  }
+  return (
+    methods.find((m) => !/store|mağaza|magaza|pickup/i.test(m.name)) ??
+    methods[0] ??
+    null
+  );
 }
 
 export async function createWaaiOrder(raw: unknown) {
-  const data = createOrderSchema.parse(raw);
-  const resolved: Array<{
-    productId: string;
-    variantId: string | null;
-    productName: string;
-    variantName: string | null;
-    sku: string;
-    quantity: number;
-    unitPrice: number;
-    taxRate: number;
-  }> = [];
+  const data = createOrderSchema.parse(normalizeWaaiOrderPayload(raw));
+  const isPickup = data.fulfillment === "pickup";
+
+  const resolved: ResolvedLine[] = [];
   for (const line of data.items) {
     const item = await resolveLine(line.sku, line.quantity);
     if ("error" in item) {
@@ -155,11 +434,14 @@ export async function createWaaiOrder(raw: unknown) {
   const methods = await db.query.shippingMethods.findMany({
     where: eq(shippingMethods.isActive, true),
   });
-  const method = methods[0];
-  const shippingPrice = method ? Number(method.price) : 0;
-  const freeAbove = method?.freeAbove ? Number(method.freeAbove) : null;
-  const shippingTotal =
-    freeAbove != null && subtotal >= freeAbove ? 0 : shippingPrice;
+  const method = pickShippingMethod(methods, data.fulfillment);
+  let shippingTotal = 0;
+  if (!isPickup && method) {
+    const shippingPrice = Number(method.price);
+    const freeAbove = method.freeAbove ? Number(method.freeAbove) : null;
+    shippingTotal =
+      freeAbove != null && subtotal >= freeAbove ? 0 : shippingPrice;
+  }
 
   const grandTotal = Number((subtotal + taxTotal + shippingTotal).toFixed(2));
   const currency = process.env.NEXT_PUBLIC_DEFAULT_CURRENCY ?? "TRY";
@@ -176,12 +458,18 @@ export async function createWaaiOrder(raw: unknown) {
     phone: data.customer.phone.trim(),
     email: data.customer.email?.trim().toLowerCase() ?? "",
     line1: data.customer.line1.trim(),
-    line2: data.customer.line2?.trim() ?? "",
+    line2:
+      data.customer.line2?.trim() ||
+      (isPickup ? "Mağazadan teslim" : ""),
     city: data.customer.city.trim(),
     district: data.customer.district?.trim() ?? "",
     postalCode: data.customer.postalCode?.trim() ?? "",
     country: data.customer.country || "CY",
   };
+
+  const defaultNote = isPickup
+    ? "WhatsApp AI siparişi · Mağazadan teslim"
+    : "WhatsApp AI siparişi";
 
   let customerId: string | null = null;
   if (data.customer.email) {
@@ -225,10 +513,12 @@ export async function createWaaiOrder(raw: unknown) {
           shippingTotal: shippingTotal.toFixed(2),
           taxTotal: taxTotal.toFixed(2),
           grandTotal: grandTotal.toFixed(2),
-          shippingCarrier: method?.carrier ?? null,
+          shippingCarrier: method?.carrier ?? (isPickup ? "Boravin Store" : null),
           guestEmail: data.customer.email?.trim().toLowerCase() ?? null,
-          customerNote: data.customerNote?.trim() || "WhatsApp AI siparişi",
-          adminNote: "Waai API üzerinden oluşturuldu",
+          customerNote: data.customerNote?.trim() || defaultNote,
+          adminNote: isPickup
+            ? "Waai API · mağazadan teslim"
+            : "Waai API üzerinden oluşturuldu",
           shippingAddress,
           billingAddress: shippingAddress,
         })
@@ -254,7 +544,9 @@ export async function createWaaiOrder(raw: unknown) {
       await tx.insert(orderStatusHistory).values({
         orderId: created.id,
         toStatus: status,
-        note: "Waai API siparişi oluşturuldu",
+        note: isPickup
+          ? "Waai API siparişi oluşturuldu (mağazadan teslim)"
+          : "Waai API siparişi oluşturuldu",
       });
 
       for (const item of resolved) {

@@ -25,5 +25,27 @@ export async function GET(request: Request) {
       orderDetail: "GET /api/v1/orders/{orderNumber}",
       shipping: "GET /api/v1/shipping/{trackingNumber}",
     },
+    createOrderHints: {
+      rule: "WhatsApp siparişinde mutlaka ad soyad, telefon, açık adres ve şehir isteyin. E-posta varsa alın, zorunlu değil. Eksik zorunlu bilgiyle sipariş oluşturulmaz.",
+      fulfillment: "delivery | pickup",
+      customerRequired: ["fullName", "phone", "line1", "city"],
+      customerOptional: ["email"],
+      askCustomer:
+        "Adınız soyadınız, telefon numaranız, açık adresiniz ve şehriniz nedir? Varsa e-posta adresinizi de yazabilirsiniz (zorunlu değil).",
+      items: [{ sku: "katalog sku veya ürün adı", quantity: 1 }],
+      paymentMethod: "whatsapp",
+      examplePickup: {
+        fulfillment: "pickup",
+        customer: {
+          fullName: "Gurcem Semercioglu",
+          phone: "05338507761",
+          email: "ornek@email.com",
+          line1: "Mustafa Çağatay Cd. No: 3 civarı / Mağazadan teslim",
+          city: "Girne",
+        },
+        items: [{ sku: "iPhone 16 Pro", quantity: 1 }],
+        paymentMethod: "whatsapp",
+      },
+    },
   });
 }
