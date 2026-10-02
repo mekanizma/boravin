@@ -40,6 +40,8 @@
     "browseProducts": "Browse products",
     "backToProducts": "Back to products",
     "currencyCode": "TRY",
+    "whatsappTitle": "Chat on WhatsApp",
+    "whatsappAria": "WhatsApp: {phone}",
     "discountPercent": "%{percent}",
     "discountPercentLabel": "{percent}% off",
     "skuLabel": "SKU {sku}",

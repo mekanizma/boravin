@@ -18,7 +18,7 @@ import { loadCachedProductCards } from "@/lib/storefront/products";
 import { getHomepageBannerAnnouncements } from "@/lib/storefront/announcements";
 import { loadPublishedCampaigns } from "@/lib/storefront/campaigns";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 async function loadHomepageSectionsUncached(): Promise<HomepageSection[] | null> {
   try {
@@ -149,10 +149,7 @@ export default async function HomePage() {
       featured: true,
       limit: 8,
     });
-    const featured =
-      featuredCards[0] ??
-      (await loadCachedProductCards({ limit: 1 }))[0] ??
-      null;
+    const featured = featuredCards[0] ?? null;
     const grid =
       featuredCards.length >= 4
         ? featuredCards

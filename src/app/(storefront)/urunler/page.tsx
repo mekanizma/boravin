@@ -27,27 +27,33 @@ export default async function UrunlerPage({
   const t = await getTranslations("Catalog");
   const sp = await searchParams;
   const sort = parseCatalogSort(sp.sort);
-  const products = mergeCatalogProducts(
-    await loadCachedProductCards({
-      search: sp.q,
-      categorySlug: sp.category,
-      brandSlug: sp.brand,
-      minPrice: sp.min ? Number(sp.min) : undefined,
-      maxPrice: sp.max ? Number(sp.max) : undefined,
-      sort,
-      limit: 48,
-    }),
-    mockProductsForCatalog({
-      search: sp.q,
-      brandSlug: sp.brand,
-      categorySlug: sp.category,
-    }).filter((product) => {
-      const price = Number(product.price);
-      if (sp.min && price < Number(sp.min)) return false;
-      if (sp.max && price > Number(sp.max)) return false;
-      return true;
-    }),
-  );
+  const dbProducts = await loadCachedProductCards({
+    search: sp.q,
+    categorySlug: sp.category,
+    brandSlug: sp.brand,
+    minPrice: sp.min ? Number(sp.min) : undefined,
+    maxPrice: sp.max ? Number(sp.max) : undefined,
+    sort,
+    limit: 48,
+  });
+  // Skip mock merge when catalog already has real products — avoids extra
+  // Unsplash images and duplicate-looking cards slowing the listing.
+  const products =
+    dbProducts.length > 0
+      ? dbProducts
+      : mergeCatalogProducts(
+          dbProducts,
+          mockProductsForCatalog({
+            search: sp.q,
+            brandSlug: sp.brand,
+            categorySlug: sp.category,
+          }).filter((product) => {
+            const price = Number(product.price);
+            if (sp.min && price < Number(sp.min)) return false;
+            if (sp.max && price > Number(sp.max)) return false;
+            return true;
+          }),
+        );
 
   return (
     <CatalogClient

@@ -1,4 +1,5 @@
 import { sql, eq, and, gte } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { StatsCard } from "@/components/admin/stats-card";
 import { SalesTrendChart } from "@/components/admin/sales-trend-chart";
 import { db } from "@/lib/db";
@@ -10,7 +11,8 @@ import {
 } from "@/lib/db/schema";
 import { formatCurrency } from "@/lib/utils";
 
-async function getDashboardData() {
+const getDashboardData = unstable_cache(
+  async () => {
   try {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
@@ -125,7 +127,10 @@ async function getDashboardData() {
       trend: [] as { day: string; total: number }[],
     };
   }
-}
+  },
+  ["admin-dashboard-v1"],
+  { revalidate: 30, tags: ["admin-dashboard", "products", "orders"] },
+);
 
 export default async function AdminDashboardPage() {
   const data = await getDashboardData();

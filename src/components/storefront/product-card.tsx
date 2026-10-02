@@ -131,13 +131,18 @@ export function ProductCard({
           ) : (
             <Link
               href="/favoriler"
+              prefetch={false}
               className="bv-float absolute top-2 right-2 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#333] shadow-[0_6px_12px_rgba(18,20,23,0.16)]"
               aria-label={tCommon("favorites")}
             >
               <Heart className="h-4 w-4" strokeWidth={1.75} />
             </Link>
           )}
-          <Link href={`/urun/${product.slug}`} className="relative block aspect-square">
+          <Link
+            href={`/urun/${product.slug}`}
+            prefetch={false}
+            className="relative block aspect-square"
+          >
             {product.imageUrl ? (
               <SafeImage
                 src={product.imageUrl}
@@ -171,6 +176,7 @@ export function ProductCard({
           )}
           <Link
             href={`/urun/${product.slug}`}
+            prefetch={false}
             className="mt-1 line-clamp-2 min-h-[2.5rem] text-[13px] leading-snug font-semibold text-[#121417] sm:text-sm"
           >
             {product.name}

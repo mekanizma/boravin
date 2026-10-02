@@ -40,6 +40,8 @@
     "browseProducts": "Ürünlere göz at",
     "backToProducts": "Ürünlere dön",
     "currencyCode": "TRY",
+    "whatsappTitle": "WhatsApp ile yazın",
+    "whatsappAria": "WhatsApp: {phone}",
     "discountPercent": "%{percent}",
     "discountPercentLabel": "%{percent} indirim",
     "skuLabel": "SKU {sku}",

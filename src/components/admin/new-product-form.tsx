@@ -306,14 +306,23 @@ export function NewProductForm({
   }
 
   function onFiles(list: FileList | null) {
-    const next = Array.from(list ?? [])
-      .filter((file) => file.type !== "image/svg+xml")
-      .slice(0, 8);
-    setFilePreviews((current) => {
-      current.forEach((url) => URL.revokeObjectURL(url));
-      return next.map((file) => URL.createObjectURL(file));
+    const incoming = Array.from(list ?? []).filter(
+      (file) => file.type.startsWith("image/") && file.type !== "image/svg+xml",
+    );
+    if (!incoming.length) return;
+
+    // Append to existing uploads instead of replacing — users often pick
+    // one photo at a time (especially on mobile).
+    const maxUploads = Math.max(0, 8 - remoteImages.length);
+    setFiles((current) => {
+      const remaining = Math.max(0, maxUploads - current.length);
+      return [...current, ...incoming.slice(0, remaining)];
     });
-    setFiles(next);
+    setFilePreviews((current) => {
+      const remaining = Math.max(0, maxUploads - current.length);
+      const added = incoming.slice(0, remaining);
+      return [...current, ...added.map((file) => URL.createObjectURL(file))];
+    });
   }
 
   async function save(status: "draft" | "active") {
@@ -514,13 +523,22 @@ export function NewProductForm({
             </p>
           )}
           <label className="flex min-h-12 cursor-pointer items-center justify-center border border-dashed border-[var(--bv-border-strong)] px-3 py-3 text-sm font-medium">
-            Görsel yükle
+            {remoteImages.length + files.length >= 8
+              ? "En fazla 8 görsel"
+              : files.length
+                ? "Görsel ekle"
+                : "Görsel yükle"}
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
               multiple
+              disabled={remoteImages.length + files.length >= 8}
               className="sr-only"
-              onChange={(event) => onFiles(event.target.files)}
+              onChange={(event) => {
+                onFiles(event.target.files);
+                // Reset so picking again (same or new file) always fires change.
+                event.target.value = "";
+              }}
             />
           </label>
         </section>

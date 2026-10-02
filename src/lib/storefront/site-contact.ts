@@ -27,6 +27,11 @@ export const siteContact = {
     { label: "Telefon", display: "+90 (392) 815 87 87", tel: "+903928158787" },
     { label: "Servis", display: "+90 (392) 815 33 25", tel: "+903928153325" },
   ] satisfies SitePhone[],
+  whatsapp: {
+    display: "+90 539 117 27 82",
+    tel: "+905391172782",
+    waMe: "https://wa.me/905391172782",
+  },
   email: "info@boravin.com",
   hours: [
     { label: "Hafta içi", value: "08:30 – 18:00" },

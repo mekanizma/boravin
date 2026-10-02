@@ -143,7 +143,7 @@ const loadProductCardsCached = unstable_cache(
   async (key: string) =>
     loadProductCardsUncached(JSON.parse(key) as LoadProductCardsOpts),
   ["product-cards"],
-  { revalidate: 60, tags: ["products", "product-cards"] },
+  { revalidate: 120, tags: ["products", "product-cards"] },
 );
 
 export async function loadProductCards(

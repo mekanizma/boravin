@@ -537,9 +537,12 @@ export async function moveHeroSlide(
 /** Replace empty or legacy single Flagship seed with the current 3 slides.
  * Also backfills missing English translations for existing slides.
  */
-export async function ensureHeroSlidesReady(): Promise<HeroSlide[]> {
+export async function ensureHeroSlidesReady(options?: {
+  translateMissingEn?: boolean;
+}): Promise<HeroSlide[]> {
   const session = await requirePermission("CONTENT_MANAGE");
   void session;
+  const translateMissingEn = options?.translateMissingEn ?? false;
   const section = await getOrCreateHeroSection();
   const items = await db
     .select()
@@ -581,6 +584,11 @@ export async function ensureHeroSlidesReady(): Promise<HeroSlide[]> {
 
     revalidateHero();
     return listHeroSlidesForAdmin();
+  }
+
+  // AI backfill is opt-in — page loads must not block on Gemini.
+  if (!translateMissingEn) {
+    return mapped;
   }
 
   let changed = false;

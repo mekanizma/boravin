@@ -1,4 +1,5 @@
 import { and, desc, eq, gt, isNull, lte, or } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { campaigns } from "@/lib/db/schema";
 
@@ -21,8 +22,8 @@ function isLive(now: Date) {
   );
 }
 
-export async function loadPublishedCampaigns(
-  limit = 12,
+async function loadPublishedCampaignsUncached(
+  limit: number,
 ): Promise<StorefrontCampaign[]> {
   try {
     const now = new Date();
@@ -45,6 +46,18 @@ export async function loadPublishedCampaigns(
     console.error("[campaigns] load failed", error);
     return [];
   }
+}
+
+const loadPublishedCampaignsCached = unstable_cache(
+  async (limit: number) => loadPublishedCampaignsUncached(limit),
+  ["storefront-campaigns-v1"],
+  { revalidate: 60, tags: ["campaigns", "homepage"] },
+);
+
+export async function loadPublishedCampaigns(
+  limit = 12,
+): Promise<StorefrontCampaign[]> {
+  return loadPublishedCampaignsCached(limit);
 }
 
 export async function getPublishedCampaignBySlug(slug: string) {

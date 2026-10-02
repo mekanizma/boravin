@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { getDb, withDb } from "@/lib/db";
 import {
   productVariants,
@@ -36,15 +36,6 @@ function toneFor(type: string) {
 async function loadStockPage(q: string, durum: string) {
   const database = getDb();
 
-  const summary = await database
-    .select({
-      total: sql<number>`count(*)::int`,
-      units: sql<number>`coalesce(sum(${products.stock}), 0)::int`,
-      low: sql<number>`count(*) filter (where ${products.stock} > 0 and ${products.stock} <= ${products.minStock})::int`,
-      out: sql<number>`count(*) filter (where ${products.stock} = 0)::int`,
-    })
-    .from(products);
-
   const conditions = [];
   if (q) {
     const like = `%${q}%`;
@@ -66,18 +57,59 @@ async function loadStockPage(q: string, durum: string) {
     conditions.push(sql`${products.stock} > ${products.minStock}`);
   }
 
-  const rows = await database
-    .select({
-      id: products.id,
-      name: products.name,
-      sku: products.sku,
-      stock: products.stock,
-      minStock: products.minStock,
-    })
-    .from(products)
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(products.stock, products.name)
-    .limit(80);
+  const movementConditions = [];
+  if (q) {
+    const like = `%${q}%`;
+    movementConditions.push(
+      or(ilike(products.name, like), ilike(products.sku, like)),
+    );
+  }
+
+  const [summary, rows, movements] = await Promise.all([
+    database
+      .select({
+        total: sql<number>`count(*)::int`,
+        units: sql<number>`coalesce(sum(${products.stock}), 0)::int`,
+        low: sql<number>`count(*) filter (where ${products.stock} > 0 and ${products.stock} <= ${products.minStock})::int`,
+        out: sql<number>`count(*) filter (where ${products.stock} = 0)::int`,
+      })
+      .from(products),
+    database
+      .select({
+        id: products.id,
+        name: products.name,
+        sku: products.sku,
+        stock: products.stock,
+        minStock: products.minStock,
+      })
+      .from(products)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(products.stock, products.name)
+      .limit(80),
+    database
+      .select({
+        id: stockMovements.id,
+        productName: products.name,
+        sku: products.sku,
+        variantName: productVariants.name,
+        type: stockMovements.type,
+        quantity: stockMovements.quantity,
+        stockBefore: stockMovements.stockBefore,
+        stockAfter: stockMovements.stockAfter,
+        note: stockMovements.note,
+        reference: stockMovements.reference,
+        createdAt: stockMovements.createdAt,
+      })
+      .from(stockMovements)
+      .innerJoin(products, eq(stockMovements.productId, products.id))
+      .leftJoin(
+        productVariants,
+        eq(stockMovements.variantId, productVariants.id),
+      )
+      .where(movementConditions.length ? and(...movementConditions) : undefined)
+      .orderBy(desc(stockMovements.createdAt))
+      .limit(40),
+  ]);
 
   const variants = rows.length
     ? await database
@@ -90,41 +122,12 @@ async function loadStockPage(q: string, durum: string) {
         })
         .from(productVariants)
         .where(
-          or(...rows.map((row) => eq(productVariants.productId, row.id))),
+          inArray(
+            productVariants.productId,
+            rows.map((row) => row.id),
+          ),
         )
     : [];
-
-  const movementConditions = [];
-  if (q) {
-    const like = `%${q}%`;
-    movementConditions.push(
-      or(ilike(products.name, like), ilike(products.sku, like)),
-    );
-  }
-
-  const movements = await database
-    .select({
-      id: stockMovements.id,
-      productName: products.name,
-      sku: products.sku,
-      variantName: productVariants.name,
-      type: stockMovements.type,
-      quantity: stockMovements.quantity,
-      stockBefore: stockMovements.stockBefore,
-      stockAfter: stockMovements.stockAfter,
-      note: stockMovements.note,
-      reference: stockMovements.reference,
-      createdAt: stockMovements.createdAt,
-    })
-    .from(stockMovements)
-    .innerJoin(products, eq(stockMovements.productId, products.id))
-    .leftJoin(
-      productVariants,
-      eq(stockMovements.variantId, productVariants.id),
-    )
-    .where(movementConditions.length ? and(...movementConditions) : undefined)
-    .orderBy(desc(stockMovements.createdAt))
-    .limit(40);
 
   return {
     stats: summary[0] ?? { total: 0, units: 0, low: 0, out: 0 },

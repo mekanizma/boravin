@@ -123,6 +123,7 @@ function MenuLink({
   return (
     <Link
       href={href}
+      prefetch={false}
       onClick={onClick}
       className={cn(
         "flex min-h-11 items-center rounded-lg px-2.5 text-[13px] leading-snug text-[#2a3138] hover:bg-[#f3f6f7] hover:text-[var(--bv-teal)] lg:min-h-9",
@@ -148,6 +149,7 @@ function BranchBlock({
     <div className={cn("min-w-0", framed && "rounded-xl bg-[#f4f7f8] p-2 sm:p-3")}>
       <Link
         href={branch.href}
+        prefetch={false}
         onClick={onNavigate}
         className="inline-flex min-h-11 items-center border-b-2 border-[var(--bv-teal)] px-2.5 text-[13px] font-semibold text-[#121417] hover:text-[var(--bv-teal)] lg:min-h-9"
       >
@@ -189,6 +191,7 @@ function CategoryPanel({
           </p>
           <Link
             href={item.href}
+            prefetch={false}
             onClick={onNavigate}
             className="inline-flex min-h-11 items-center gap-0.5 text-[13px] font-semibold text-[var(--bv-teal)] lg:min-h-9"
           >
@@ -499,6 +502,7 @@ export function SiteHeader({
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   aria-expanded={open}
                   className={itemClass}
                   onMouseEnter={() => {
@@ -520,6 +524,7 @@ export function SiteHeader({
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   className={itemClass}
                   onMouseEnter={() => {
                     if (canHover()) setOpenNav(null);
@@ -557,7 +562,7 @@ export function SiteHeader({
                   />
                 </button>
               ) : (
-                <Link key={item.href} href={item.href} className={chipClass}>
+                <Link key={item.href} href={item.href} prefetch={false} className={chipClass}>
                   {categoryLabel(item)}
                 </Link>
               );

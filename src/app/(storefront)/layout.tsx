@@ -1,22 +1,21 @@
 import { SiteHeader } from "@/components/storefront/site-header";
 import { SiteFooter } from "@/components/storefront/site-footer";
 import { AnnouncementPopup } from "@/components/storefront/announcement-popup";
-import {
-  getPopupAnnouncement,
-  getTopBarAnnouncement,
-} from "@/lib/storefront/announcements";
+import { WhatsAppFloat } from "@/components/storefront/whatsapp-float";
+import { loadPublishedAnnouncements } from "@/lib/storefront/announcements";
 
-export const dynamic = "force-dynamic";
+/** Allow data caches (announcements / product cards) to stick across requests. */
+export const revalidate = 60;
 
 export default async function StorefrontLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [topBar, popup] = await Promise.all([
-    getTopBarAnnouncement(),
-    getPopupAnnouncement(),
-  ]);
+  // One DB round-trip for both top bar + popup (previously two identical loads).
+  const announcements = await loadPublishedAnnouncements();
+  const topBar = announcements.find((row) => row.type === "top_bar") ?? null;
+  const popup = announcements.find((row) => row.type === "popup") ?? null;
 
   return (
     <div className="flex min-h-dvh flex-col bg-white">
@@ -29,6 +28,7 @@ export default async function StorefrontLayout({
       />
       <main className="relative flex-1 bg-[#e8edf1]">{children}</main>
       <SiteFooter />
+      <WhatsAppFloat />
       <AnnouncementPopup
         announcement={
           popup

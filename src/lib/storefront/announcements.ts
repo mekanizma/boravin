@@ -1,4 +1,6 @@
 import { and, asc, desc, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
+import { cache } from "react";
 import { db } from "@/lib/db";
 import { announcements } from "@/lib/db/schema";
 
@@ -52,10 +54,16 @@ async function loadPublishedAnnouncementsUncached(): Promise<
   }
 }
 
-/** Fresh each request — announcements change often from admin. */
-export async function loadPublishedAnnouncements() {
-  return loadPublishedAnnouncementsUncached();
-}
+const loadPublishedAnnouncementsCached = unstable_cache(
+  loadPublishedAnnouncementsUncached,
+  ["storefront-announcements-v1"],
+  { revalidate: 30, tags: ["announcements"] },
+);
+
+/** Request-deduped + short TTL cache. Admin mutations revalidateTag("announcements"). */
+export const loadPublishedAnnouncements = cache(async () =>
+  loadPublishedAnnouncementsCached(),
+);
 
 export async function getTopBarAnnouncement() {
   const rows = await loadPublishedAnnouncements();

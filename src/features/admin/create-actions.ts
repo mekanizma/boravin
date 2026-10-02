@@ -208,6 +208,7 @@ export async function createCampaign(
       after: { name: data.name, slug, type: data.type },
     });
     revalidatePath("/admin/campaigns");
+    revalidateTag("campaigns", "max");
     revalidatePath("/");
     revalidatePath("/kampanyalar");
     revalidatePath(`/kampanya/${slug}`);
