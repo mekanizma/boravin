@@ -7,6 +7,28 @@ export function jsonOk<T>(data: T, init?: { status?: number }) {
   );
 }
 
+/** Waai / website-api.client expects `products`, `items`, or an array `data`. */
+export function jsonWaaiProductList<T extends Record<string, unknown>>(
+  items: T[],
+  meta?: {
+    status?: number;
+    query?: string;
+    pagination?: Record<string, unknown>;
+  },
+) {
+  return NextResponse.json(
+    {
+      ok: true as const,
+      products: items,
+      items,
+      data: items,
+      ...(meta?.query ? { query: meta.query } : {}),
+      ...(meta?.pagination ? { pagination: meta.pagination } : {}),
+    },
+    { status: meta?.status ?? 200 },
+  );
+}
+
 export function jsonError(
   code: string,
   message: string,

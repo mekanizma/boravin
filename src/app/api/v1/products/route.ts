@@ -1,5 +1,5 @@
 import { requireWaaiAuth } from "@/lib/waai-api/auth";
-import { jsonOk, parsePagination } from "@/lib/waai-api/http";
+import { jsonWaaiProductList, parsePagination } from "@/lib/waai-api/http";
 import { listProducts } from "@/lib/waai-api/products";
 
 export const runtime = "nodejs";
@@ -19,8 +19,7 @@ export async function GET(request: Request) {
     inStockOnly: url.searchParams.get("inStock") === "1",
   });
 
-  return jsonOk({
-    items: result.items,
+  return jsonWaaiProductList(result.items, {
     pagination: {
       page,
       limit,
