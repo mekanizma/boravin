@@ -32,6 +32,7 @@ export async function getStockBySku(sku: string) {
       inStock: variant.stock > 0,
       lowStock: variant.stock > 0 && variant.stock <= product.minStock,
       minStock: product.minStock,
+      options: variant.options ?? {},
       price:
         variant.price != null ? Number(variant.price) : Number(product.price),
       currency: process.env.NEXT_PUBLIC_DEFAULT_CURRENCY ?? "TRY",

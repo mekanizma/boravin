@@ -47,7 +47,8 @@ export const createOrderSchema = z.object({
     .array(
       z.object({
         sku: z.string().min(1),
-        quantity: z.number().int().min(1).max(100),
+        quantity: z.coerce.number().int().min(1).max(100),
+        options: z.record(z.string(), z.string()).optional(),
       }),
     )
     .min(1)
@@ -96,8 +97,14 @@ function readQuantity(value: unknown): number {
 
 /** Accept common Waai / flat payloads before Zod validation. */
 export function normalizeWaaiOrderPayload(raw: unknown): unknown {
-  const root = asRecord(raw);
+  let root = asRecord(raw);
   if (!root) return raw;
+
+  // Some clients wrap the body: { data: {...} } or { order: {...} }
+  const nested = asRecord(root.data) ?? asRecord(root.order) ?? asRecord(root.payload);
+  if (nested && (nested.customer || nested.items || nested.fullName || nested.name)) {
+    root = { ...nested, ...root, customer: nested.customer ?? root.customer };
+  }
 
   const customerIn = asRecord(root.customer) ?? root;
   const fullName = readString(
@@ -157,7 +164,29 @@ export function normalizeWaaiOrderPayload(raw: unknown): unknown {
       const sku =
         readString(row.sku, row.productSku, row.variantSku, row.name, row.productName) ??
         "";
-      return { sku, quantity: readQuantity(row.quantity ?? row.qty) };
+      const optionsRaw = asRecord(row.options) ?? asRecord(row.variantOptions);
+      const options: Record<string, string> | undefined = optionsRaw
+        ? Object.fromEntries(
+            Object.entries(optionsRaw)
+              .map(([k, v]) => [k, readString(v) ?? ""])
+              .filter(([, v]) => v.length > 0),
+          )
+        : undefined;
+      // Flat shortcuts: color/renk, storage/depolama
+      const renk = readString(row.renk, row.color, row.Colour);
+      const depolama = readString(row.depolama, row.storage, row.kapasite);
+      const mergedOptions = {
+        ...(options ?? {}),
+        ...(renk ? { renk } : {}),
+        ...(depolama ? { depolama } : {}),
+      };
+      return {
+        sku,
+        quantity: readQuantity(row.quantity ?? row.qty),
+        ...(Object.keys(mergedOptions).length > 0
+          ? { options: mergedOptions }
+          : {}),
+      };
     }) ?? undefined;
 
   // Single-item shortcuts from Waai tools
@@ -270,6 +299,7 @@ async function resolveFromProduct(
   product: typeof products.$inferSelect,
   quantity: number,
   requestedSku: string,
+  preferredOptions?: Record<string, string>,
 ): Promise<ResolvedLine | ResolveError> {
   const variants = await db.query.productVariants.findMany({
     where: and(
@@ -279,7 +309,35 @@ async function resolveFromProduct(
   });
 
   if (variants.length > 0) {
-    const withStock = variants.find((v) => v.stock >= quantity);
+    const optionEntries = Object.entries(preferredOptions ?? {}).filter(
+      ([, v]) => v.trim().length > 0,
+    );
+
+    const matchByOptions =
+      optionEntries.length > 0
+        ? variants.find((v) => {
+            const opts = v.options ?? {};
+            return optionEntries.every(([key, value]) => {
+              const actual =
+                opts[key] ??
+                opts[key.toLowerCase()] ??
+                opts[key === "color" ? "renk" : key] ??
+                opts[key === "storage" ? "depolama" : key];
+              return (
+                typeof actual === "string" &&
+                actual.toLowerCase() === value.toLowerCase()
+              );
+            });
+          })
+        : undefined;
+
+    const withStock =
+      matchByOptions && matchByOptions.stock >= quantity
+        ? matchByOptions
+        : matchByOptions
+          ? undefined
+          : variants.find((v) => v.stock >= quantity);
+
     if (withStock) {
       const unitPrice =
         withStock.price != null ? Number(withStock.price) : Number(product.price);
@@ -342,6 +400,7 @@ async function resolveFromProduct(
 async function resolveLine(
   sku: string,
   quantity: number,
+  preferredOptions?: Record<string, string>,
 ): Promise<ResolvedLine | ResolveError> {
   const normalized = sku.trim();
   if (!normalized) return { error: "PRODUCT_NOT_FOUND", sku };
@@ -383,10 +442,14 @@ async function resolveLine(
   }
 
   const byIdentity = await resolveProductByIdentity(normalized);
-  if (byIdentity) return resolveFromProduct(byIdentity, quantity, sku);
+  if (byIdentity) {
+    return resolveFromProduct(byIdentity, quantity, sku, preferredOptions);
+  }
 
   const byName = await resolveProductByName(normalized);
-  if (byName) return resolveFromProduct(byName, quantity, sku);
+  if (byName) {
+    return resolveFromProduct(byName, quantity, sku, preferredOptions);
+  }
 
   return { error: "PRODUCT_NOT_FOUND", sku };
 }
@@ -415,7 +478,7 @@ export async function createWaaiOrder(raw: unknown) {
 
   const resolved: ResolvedLine[] = [];
   for (const line of data.items) {
-    const item = await resolveLine(line.sku, line.quantity);
+    const item = await resolveLine(line.sku, line.quantity, line.options);
     if ("error" in item) {
       return { ok: false as const, error: item };
     }

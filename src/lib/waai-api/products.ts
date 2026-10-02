@@ -1,18 +1,34 @@
 import { and, asc, desc, eq, gt, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  attributeValues,
+  attributes,
   brands,
   categories,
+  productAttributeValues,
   productImages,
   productVariants,
   products,
 } from "@/lib/db/schema";
-import { serializeProduct } from "@/lib/waai-api/serialize";
+import {
+  serializeProduct,
+  type WaaiProductAttribute,
+} from "@/lib/waai-api/serialize";
 
 type ProductImageRow = {
   url: string;
   alt: string | null;
   isPrimary: boolean;
+};
+
+type ProductVariantRow = {
+  id: string;
+  name: string;
+  sku: string;
+  price: string | null;
+  stock: number;
+  options: Record<string, string> | null;
+  isActive: boolean;
 };
 
 async function attachImages(productIds: string[]) {
@@ -41,6 +57,106 @@ async function attachImages(productIds: string[]) {
     map.set(img.productId, list);
   }
   return map;
+}
+
+async function attachVariants(productIds: string[]) {
+  const map = new Map<string, ProductVariantRow[]>();
+  if (productIds.length === 0) return map;
+
+  const rows = await db
+    .select({
+      id: productVariants.id,
+      productId: productVariants.productId,
+      name: productVariants.name,
+      sku: productVariants.sku,
+      price: productVariants.price,
+      stock: productVariants.stock,
+      options: productVariants.options,
+      isActive: productVariants.isActive,
+    })
+    .from(productVariants)
+    .where(inArray(productVariants.productId, productIds))
+    .orderBy(asc(productVariants.name));
+
+  for (const row of rows) {
+    const list = map.get(row.productId) ?? [];
+    list.push({
+      id: row.id,
+      name: row.name,
+      sku: row.sku,
+      price: row.price,
+      stock: row.stock,
+      options: row.options,
+      isActive: row.isActive,
+    });
+    map.set(row.productId, list);
+  }
+  return map;
+}
+
+async function attachAttributes(productIds: string[]) {
+  const map = new Map<string, WaaiProductAttribute[]>();
+  if (productIds.length === 0) return map;
+
+  const rows = await db
+    .select({
+      productId: productAttributeValues.productId,
+      code: attributes.code,
+      name: attributes.name,
+      unit: attributes.unit,
+      valueText: productAttributeValues.valueText,
+      value: attributeValues.value,
+    })
+    .from(productAttributeValues)
+    .innerJoin(
+      attributes,
+      eq(productAttributeValues.attributeId, attributes.id),
+    )
+    .leftJoin(
+      attributeValues,
+      eq(productAttributeValues.attributeValueId, attributeValues.id),
+    )
+    .where(inArray(productAttributeValues.productId, productIds))
+    .orderBy(asc(attributes.name));
+
+  for (const row of rows) {
+    const value = (row.valueText ?? row.value ?? "").trim();
+    if (!value) continue;
+    const list = map.get(row.productId) ?? [];
+    list.push({
+      code: row.code,
+      name: row.name,
+      unit: row.unit,
+      value,
+    });
+    map.set(row.productId, list);
+  }
+  return map;
+}
+
+async function enrichProducts<T extends { id: string }>(
+  rows: T[],
+  opts?: { detail?: boolean },
+) {
+  const ids = rows.map((r) => r.id);
+  const [imageMap, variantMap, attributeMap] = await Promise.all([
+    attachImages(ids),
+    attachVariants(ids),
+    attachAttributes(ids),
+  ]);
+
+  return rows.map((row) =>
+    serializeProduct(
+      {
+        ...(row as Record<string, unknown>),
+        id: row.id,
+        images: imageMap.get(row.id) ?? [],
+        variants: variantMap.get(row.id) ?? [],
+        attributes: attributeMap.get(row.id) ?? [],
+      } as Parameters<typeof serializeProduct>[0],
+      opts,
+    ),
+  );
 }
 
 const productSelect = {
@@ -116,11 +232,9 @@ export async function listProducts(opts: {
       .where(where),
   ]);
 
-  const imageMap = await attachImages(rows.map((r) => r.id));
+  const items = await enrichProducts(rows);
   return {
-    items: rows.map((row) =>
-      serializeProduct({ ...row, images: imageMap.get(row.id) ?? [] }),
-    ),
+    items,
     total: countRows[0]?.count ?? rows.length,
   };
 }
@@ -167,11 +281,9 @@ export async function searchProducts(opts: {
       .where(where),
   ]);
 
-  const imageMap = await attachImages(rows.map((r) => r.id));
+  const items = await enrichProducts(rows);
   return {
-    items: rows.map((row) =>
-      serializeProduct({ ...row, images: imageMap.get(row.id) ?? [] }),
-    ),
+    items,
     total: countRows[0]?.count ?? rows.length,
     query: q,
   };
@@ -226,38 +338,12 @@ export async function getProductBySku(sku: string) {
       .then((rows) => rows[0] ?? null);
     if (!parent) return null;
 
-    const [imageMap, variants] = await Promise.all([
-      attachImages([parent.id]),
-      db.query.productVariants.findMany({
-        where: eq(productVariants.productId, parent.id),
-      }),
-    ]);
-
-    return serializeProduct(
-      {
-        ...parent,
-        images: imageMap.get(parent.id) ?? [],
-        variants,
-      },
-      { detail: true },
-    );
+    const [enriched] = await enrichProducts([parent], { detail: true });
+    return enriched ?? null;
   }
 
-  const [imageMap, variants] = await Promise.all([
-    attachImages([row.id]),
-    db.query.productVariants.findMany({
-      where: eq(productVariants.productId, row.id),
-    }),
-  ]);
-
-  return serializeProduct(
-    {
-      ...row,
-      images: imageMap.get(row.id) ?? [],
-      variants,
-    },
-    { detail: true },
-  );
+  const [enriched] = await enrichProducts([row], { detail: true });
+  return enriched ?? null;
 }
 
 export async function getRecommendations(opts: {
@@ -355,11 +441,9 @@ export async function getRecommendations(opts: {
       .limit(limit);
   }
 
-  const imageMap = await attachImages(rows.map((r) => r.id));
+  const items = await enrichProducts(rows);
   return {
     seedSku: opts.sku ?? null,
-    items: rows.map((row) =>
-      serializeProduct({ ...row, images: imageMap.get(row.id) ?? [] }),
-    ),
+    items,
   };
 }

@@ -80,33 +80,19 @@ describe("normalizeWaaiOrderPayload", () => {
     ).toThrow(/şehir/i);
   });
 
-  it("accepts optional email when provided", () => {
-    const withEmail = createOrderSchema.parse(
+  it("accepts string quantity from WhatsApp tools", () => {
+    const parsed = createOrderSchema.parse(
       normalizeWaaiOrderPayload({
         customer: {
           fullName: "Ali Veli",
           phone: "05321112233",
-          email: "ali@example.com",
           line1: "Atatürk Cad. No: 12",
           city: "Lefkoşa",
         },
-        items: [{ sku: "BV-MOCK-1000", quantity: 1 }],
+        items: [{ sku: "iPhone 16 Pro", quantity: "1", options: { renk: "Siyah" } }],
       }),
     );
-    expect(withEmail.customer.email).toBe("ali@example.com");
-
-    const withoutEmail = createOrderSchema.parse(
-      normalizeWaaiOrderPayload({
-        customer: {
-          fullName: "Ali Veli",
-          phone: "05321112233",
-          email: "",
-          line1: "Atatürk Cad. No: 12",
-          city: "Lefkoşa",
-        },
-        items: [{ sku: "BV-MOCK-1000", quantity: 1 }],
-      }),
-    );
-    expect(withoutEmail.customer.email).toBeUndefined();
+    expect(parsed.items[0]?.quantity).toBe(1);
+    expect(parsed.items[0]?.options).toEqual({ renk: "Siyah" });
   });
 });

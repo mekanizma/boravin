@@ -5,6 +5,23 @@ import {
   type OrderStatus,
 } from "@/lib/orders/status";
 
+export type WaaiProductAttribute = {
+  code: string;
+  name: string;
+  unit: string | null;
+  value: string;
+};
+
+export type WaaiProductVariant = {
+  id: string;
+  name: string;
+  sku: string;
+  price: number;
+  stock: number;
+  inStock: boolean;
+  options: Record<string, string>;
+};
+
 type ProductRow = {
   id: string;
   name: string;
@@ -42,6 +59,7 @@ type ProductRow = {
     options: Record<string, string> | null;
     isActive: boolean;
   }>;
+  attributes?: WaaiProductAttribute[];
 };
 
 function absoluteUrl(url: string | null | undefined) {
@@ -49,6 +67,22 @@ function absoluteUrl(url: string | null | undefined) {
   if (/^https?:\/\//i.test(url)) return url;
   const base = getAppUrl();
   return `${base}${url.startsWith("/") ? url : `/${url}`}`;
+}
+
+function mapVariants(
+  row: ProductRow,
+): WaaiProductVariant[] {
+  return (row.variants ?? [])
+    .filter((v) => v.isActive)
+    .map((v) => ({
+      id: v.id,
+      name: v.name,
+      sku: v.sku,
+      price: v.price != null ? Number(v.price) : Number(row.price),
+      stock: v.stock,
+      inStock: v.stock > 0,
+      options: v.options ?? {},
+    }));
 }
 
 export function serializeProduct(row: ProductRow, opts?: { detail?: boolean }) {
@@ -59,6 +93,10 @@ export function serializeProduct(row: ProductRow, opts?: { detail?: boolean }) {
   }));
   const primaryImage =
     images.find((img) => img.isPrimary)?.url ?? images[0]?.url ?? null;
+  const variants = mapVariants(row);
+  const specs = row.specs ?? {};
+  const technicalSpecs = row.technicalSpecs ?? {};
+  const attributes = row.attributes ?? [];
 
   const base = {
     id: row.id,
@@ -73,12 +111,21 @@ export function serializeProduct(row: ProductRow, opts?: { detail?: boolean }) {
     currency: process.env.NEXT_PUBLIC_DEFAULT_CURRENCY ?? "TRY",
     taxRate: row.taxRate != null ? Number(row.taxRate) : 0,
     stock: row.stock,
-    inStock: row.stock > 0,
+    inStock: row.stock > 0 || variants.some((v) => v.inStock),
     lowStock: row.stock > 0 && row.stock <= row.minStock,
     isFeatured: row.isFeatured,
     isNew: row.isNew,
     isCampaign: row.isCampaign,
     tags: row.tags ?? [],
+    /** Ürün özellikleri (JSON specs) — liste ve detayda */
+    specs,
+    /** Teknik özellikler — liste ve detayda */
+    technicalSpecs,
+    /** Filtre/özellik attribute’ları (renk, depolama vb.) */
+    attributes,
+    /** Satın alınabilir varyantlar (SKU + options) — WhatsApp seçimi için */
+    variants,
+    hasVariants: variants.length > 0,
     category: row.categoryId
       ? {
           id: row.categoryId,
@@ -102,21 +149,8 @@ export function serializeProduct(row: ProductRow, opts?: { detail?: boolean }) {
   return {
     ...base,
     description: row.description,
-    specs: row.specs ?? {},
-    technicalSpecs: row.technicalSpecs ?? {},
     soldCount: row.soldCount ?? 0,
     images,
-    variants: (row.variants ?? [])
-      .filter((v) => v.isActive)
-      .map((v) => ({
-        id: v.id,
-        name: v.name,
-        sku: v.sku,
-        price: v.price != null ? Number(v.price) : Number(row.price),
-        stock: v.stock,
-        inStock: v.stock > 0,
-        options: v.options ?? {},
-      })),
   };
 }
 
