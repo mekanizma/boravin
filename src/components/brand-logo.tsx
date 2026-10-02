@@ -11,8 +11,8 @@ const WORDMARK_RATIO = 0.62;
 
 const SIZE = {
   sm: { height: 28, className: "h-7" },
-  md: { height: 44, className: "h-11 sm:h-12" },
-  lg: { height: 52, className: "h-[3.25rem] sm:h-14" },
+  md: { height: 40, className: "h-10 sm:h-11 md:h-12" },
+  lg: { height: 52, className: "h-12 sm:h-14" },
 } as const;
 
 export function BrandLogo({
@@ -33,17 +33,20 @@ export function BrandLogo({
   const displayHeight = useTextTagline
     ? Math.round(s.height * WORDMARK_RATIO)
     : s.height;
-  const width = Math.round(s.height * ASPECT);
+  const width = Math.round(displayHeight * ASPECT);
 
   const image = (
     <span
       className={cn(
-        "relative inline-block overflow-hidden",
+        "relative inline-flex shrink-0 items-center",
         useTextTagline ? undefined : s.className,
       )}
       style={
         useTextTagline
-          ? { height: displayHeight, width: Math.round(displayHeight * ASPECT / WORDMARK_RATIO) }
+          ? {
+              height: displayHeight,
+              width: Math.round((displayHeight * ASPECT) / WORDMARK_RATIO),
+            }
           : undefined
       }
     >
@@ -51,23 +54,23 @@ export function BrandLogo({
         src="/boravin-logo.png"
         alt={t("logoAlt")}
         width={width}
-        height={s.height}
+        height={displayHeight}
         priority={priority}
         className={cn(
-          "object-contain object-left object-top",
-          useTextTagline ? "h-auto w-full max-w-none" : cn(s.className, "w-auto"),
+          "max-h-full w-auto max-w-[min(42vw,11.5rem)] object-contain object-left sm:max-w-[13rem]",
+          useTextTagline ? "h-auto" : s.className,
         )}
-        style={
-          useTextTagline
-            ? { width: "100%", height: "auto", maxWidth: "none" }
-            : { width: "auto", height: undefined }
-        }
       />
     </span>
   );
 
   const mark = (
-    <span className={cn("inline-flex flex-col items-start leading-none", className)}>
+    <span
+      className={cn(
+        "inline-flex max-w-full flex-col items-start leading-none",
+        className,
+      )}
+    >
       {image}
       {useTextTagline ? (
         <span className="mt-0.5 max-w-[9.5rem] text-[9px] font-medium tracking-[0.02em] text-[#5c6570] sm:max-w-[11rem] sm:text-[10px]">
@@ -85,7 +88,7 @@ export function BrandLogo({
     <Link
       href={href}
       aria-label={t("homeAria")}
-      className="inline-flex shrink-0 items-center leading-none"
+      className="inline-flex min-w-0 shrink-0 items-center overflow-visible leading-none"
     >
       {mark}
     </Link>

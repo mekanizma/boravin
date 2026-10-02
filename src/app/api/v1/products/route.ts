@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     inStockOnly: url.searchParams.get("inStock") === "1",
   });
 
-  return jsonWaaiProductList(result.items, {
+  return jsonWaaiProductList(result.items as Array<Record<string, unknown>>, {
     pagination: {
       page,
       limit,

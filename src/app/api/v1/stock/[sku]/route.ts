@@ -1,5 +1,5 @@
 import { requireWaaiAuth } from "@/lib/waai-api/auth";
-import { jsonError, jsonOk } from "@/lib/waai-api/http";
+import { jsonError, jsonWaaiStock } from "@/lib/waai-api/http";
 import { getStockBySku } from "@/lib/waai-api/stock";
 
 export const runtime = "nodejs";
@@ -11,11 +11,23 @@ export async function GET(request: Request, context: RouteContext) {
   const auth = requireWaaiAuth(request);
   if (!auth.ok) return auth.response;
 
-  const { sku } = await context.params;
-  const stock = await getStockBySku(decodeURIComponent(sku));
+  const { sku: paramSku } = await context.params;
+  const url = new URL(request.url);
+  const sku =
+    decodeURIComponent(paramSku).trim() ||
+    url.searchParams.get("sku")?.trim() ||
+    url.searchParams.get("q")?.trim() ||
+    url.searchParams.get("name")?.trim() ||
+    "";
+
+  const stock = await getStockBySku(sku);
   if (!stock) {
-    return jsonError("STOCK_NOT_FOUND", "SKU için stok kaydı bulunamadı.", 404);
+    return jsonError(
+      "STOCK_NOT_FOUND",
+      `Stok bulunamadı: ${sku}. Ürün adı veya katalog SKU deneyin.`,
+      404,
+    );
   }
 
-  return jsonOk(stock);
+  return jsonWaaiStock(stock as Record<string, unknown>);
 }

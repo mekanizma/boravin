@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SafeImage } from "@/components/ui/safe-image";
 
 export type HeroSliderSlide = {
@@ -46,11 +45,15 @@ const FALLBACK_SLIDES: HeroSliderSlide[] = [
   },
 ];
 
+const SWIPE_THRESHOLD_PX = 48;
+
 export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
   const t = useTranslations("Home");
   const [index, setIndex] = React.useState(0);
   const [paused, setPaused] = React.useState(false);
   const [broken, setBroken] = React.useState<Record<string, true>>({});
+  const pointerStart = React.useRef<{ x: number; y: number } | null>(null);
+  const swiped = React.useRef(false);
 
   const resolved = React.useMemo(() => {
     const fromCms = (slides ?? []).filter((slide) => {
@@ -98,6 +101,42 @@ export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
     setIndex((next + resolved.length) % resolved.length);
   }
 
+  function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (resolved.length <= 1) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    pointerStart.current = { x: event.clientX, y: event.clientY };
+    swiped.current = false;
+    setPaused(true);
+  }
+
+  function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const start = pointerStart.current;
+    pointerStart.current = null;
+    setPaused(false);
+    if (!start || resolved.length <= 1) return;
+
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_THRESHOLD_PX) return;
+    if (Math.abs(dx) < Math.abs(dy)) return;
+
+    swiped.current = true;
+    if (dx < 0) go(index + 1);
+    else go(index - 1);
+  }
+
+  function onPointerCancel() {
+    pointerStart.current = null;
+    setPaused(false);
+  }
+
+  function onSlideLinkClick(event: React.MouseEvent) {
+    if (swiped.current) {
+      event.preventDefault();
+      swiped.current = false;
+    }
+  }
+
   return (
     <section
       className="bv-hero-band relative overflow-hidden"
@@ -105,7 +144,16 @@ export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
       onMouseLeave={() => setPaused(false)}
     >
       <div className="container-bv relative py-5 sm:py-7">
-        <div className="bv-hero-slab bv-stage relative overflow-hidden rounded-[1.25rem] bg-[#1a1d22] text-white">
+        <div
+          className="bv-hero-slab bv-stage relative touch-pan-y overflow-hidden rounded-[1.25rem] bg-[#1a1d22] text-white select-none"
+          style={{ touchAction: "pan-y" }}
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
+          onPointerLeave={(event) => {
+            if (pointerStart.current) onPointerUp(event);
+          }}
+        >
           <div className="relative aspect-[16/10] w-full sm:aspect-[2/1] lg:aspect-[21/9]">
             <SafeImage
               key={slideKey}
@@ -114,13 +162,14 @@ export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
               fill
               priority={index === 0}
               sizes="(max-width: 768px) 100vw, (max-width: 1280px) 100vw, 1200px"
-              className="object-cover object-center"
+              className="pointer-events-none object-cover object-center"
               fallbackSrc=""
               onLoadError={() => {
                 setBroken((prev) =>
                   prev[slideKey] ? prev : { ...prev, [slideKey]: true },
                 );
               }}
+              draggable={false}
             />
             {hasCopy ? (
               <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-r from-black/55 via-black/25 to-transparent">
@@ -143,6 +192,7 @@ export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
                   {hasLink ? (
                     <Link
                       href={linkUrl}
+                      onClick={onSlideLinkClick}
                       className="bv-key bv-key-sea pointer-events-auto mt-6 inline-flex h-11 w-fit items-center rounded-xl bg-[var(--bv-teal)] px-5 text-sm font-semibold text-white"
                     >
                       {ctaLabel}
@@ -153,45 +203,28 @@ export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
             ) : hasLink ? (
               <Link
                 href={linkUrl}
+                onClick={onSlideLinkClick}
                 className="absolute inset-0 z-[1]"
                 aria-label={ctaLabel}
+                draggable={false}
               />
             ) : null}
           </div>
 
           {resolved.length > 1 ? (
-            <>
-              <button
-                type="button"
-                className="absolute top-1/2 left-3 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-black sm:inline-flex"
-                aria-label={t("prevSlide")}
-                onClick={() => go(index - 1)}
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button
-                type="button"
-                className="absolute top-1/2 right-3 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-black sm:inline-flex"
-                aria-label={t("nextSlide")}
-                onClick={() => go(index + 1)}
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-
-              <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
-                {resolved.map((item, i) => (
-                  <button
-                    key={item.id ?? `${item.imageUrl}-${i}`}
-                    type="button"
-                    aria-label={t("slideDot", {
-                      eyebrow: item.eyebrow || item.title || String(i + 1),
-                    })}
-                    onClick={() => setIndex(i)}
-                    className={`h-1.5 rounded-full ${i === index ? "w-6 bg-white" : "w-1.5 bg-white/50"}`}
-                  />
-                ))}
-              </div>
-            </>
+            <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+              {resolved.map((item, i) => (
+                <button
+                  key={item.id ?? `${item.imageUrl}-${i}`}
+                  type="button"
+                  aria-label={t("slideDot", {
+                    eyebrow: item.eyebrow || item.title || String(i + 1),
+                  })}
+                  onClick={() => setIndex(i)}
+                  className={`h-1.5 rounded-full ${i === index ? "w-6 bg-white" : "w-1.5 bg-white/50"}`}
+                />
+              ))}
+            </div>
           ) : null}
         </div>
       </div>

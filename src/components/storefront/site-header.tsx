@@ -405,7 +405,7 @@ export function SiteHeader({
           </div>
         </div>
 
-        <div className="container-bv flex items-center gap-2.5 py-2 lg:gap-5 lg:py-3">
+        <div className="container-bv flex min-h-[3.25rem] items-center gap-2 py-2.5 sm:gap-2.5 lg:min-h-0 lg:gap-5 lg:py-3">
           <button
             type="button"
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center lg:hidden"
@@ -419,7 +419,9 @@ export function SiteHeader({
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
 
-          <BrandLogo priority size="md" />
+          <div className="shrink-0 overflow-visible">
+            <BrandLogo priority size="md" />
+          </div>
 
           <div className="hidden min-w-0 flex-1 lg:block">
             <HeaderSearch id="header-search" />

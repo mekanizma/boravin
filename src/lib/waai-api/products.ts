@@ -324,22 +324,28 @@ export async function getProductBySku(sku: string) {
         eq(productVariants.isActive, true),
       ),
     });
-    if (!variant) return null;
+    if (variant) {
+      const parent = await db
+        .select(productSelect)
+        .from(products)
+        .leftJoin(categories, eq(products.categoryId, categories.id))
+        .leftJoin(brands, eq(products.brandId, brands.id))
+        .where(
+          and(eq(products.id, variant.productId), eq(products.status, "active")),
+        )
+        .limit(1)
+        .then((rows) => rows[0] ?? null);
+      if (!parent) return null;
 
-    const parent = await db
-      .select(productSelect)
-      .from(products)
-      .leftJoin(categories, eq(products.categoryId, categories.id))
-      .leftJoin(brands, eq(products.brandId, brands.id))
-      .where(
-        and(eq(products.id, variant.productId), eq(products.status, "active")),
-      )
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    if (!parent) return null;
+      const [enriched] = await enrichProducts([parent], { detail: true });
+      return enriched ?? null;
+    }
 
-    const [enriched] = await enrichProducts([parent], { detail: true });
-    return enriched ?? null;
+    // WhatsApp often sends product title instead of SKU.
+    const byName = await searchProducts({ q: normalized, offset: 0, limit: 5 });
+    const hit = byName.items[0];
+    if (!hit?.sku) return null;
+    return getProductBySku(hit.sku);
   }
 
   const [enriched] = await enrichProducts([row], { detail: true });

@@ -98,9 +98,14 @@ export function serializeProduct(row: ProductRow, opts?: { detail?: boolean }) {
   const technicalSpecs = row.technicalSpecs ?? {};
   const attributes = row.attributes ?? [];
 
+  const variantStock = variants.reduce((sum, v) => sum + v.stock, 0);
+  const effectiveStock = Math.max(row.stock, variantStock);
+
   const base = {
     id: row.id,
     name: row.name,
+    /** Waai / bazı istemciler `title` bekler */
+    title: row.name,
     slug: row.slug,
     sku: row.sku,
     barcode: row.barcode,
@@ -110,20 +115,19 @@ export function serializeProduct(row: ProductRow, opts?: { detail?: boolean }) {
       row.compareAtPrice != null ? Number(row.compareAtPrice) : null,
     currency: process.env.NEXT_PUBLIC_DEFAULT_CURRENCY ?? "TRY",
     taxRate: row.taxRate != null ? Number(row.taxRate) : 0,
-    stock: row.stock,
-    inStock: row.stock > 0 || variants.some((v) => v.inStock),
-    lowStock: row.stock > 0 && row.stock <= row.minStock,
+    stock: effectiveStock,
+    quantity: effectiveStock,
+    stockQuantity: effectiveStock,
+    available: effectiveStock,
+    inStock: effectiveStock > 0,
+    lowStock: effectiveStock > 0 && effectiveStock <= row.minStock,
     isFeatured: row.isFeatured,
     isNew: row.isNew,
     isCampaign: row.isCampaign,
     tags: row.tags ?? [],
-    /** Ürün özellikleri (JSON specs) — liste ve detayda */
     specs,
-    /** Teknik özellikler — liste ve detayda */
     technicalSpecs,
-    /** Filtre/özellik attribute’ları (renk, depolama vb.) */
     attributes,
-    /** Satın alınabilir varyantlar (SKU + options) — WhatsApp seçimi için */
     variants,
     hasVariants: variants.length > 0,
     category: row.categoryId
