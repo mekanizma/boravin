@@ -70,13 +70,24 @@ export function jsonWaaiProduct<T extends Record<string, unknown>>(product: T) {
     typeof product.shortDescription === "string"
       ? product.shortDescription
       : null;
+  const description =
+    typeof product.description === "string" && product.description.trim()
+      ? product.description
+      : null;
+  const featuresHint = description
+    ? description.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 280)
+    : shortDescription;
   const message =
     typeof product.message === "string"
       ? product.message
       : name
-        ? inStock
-          ? `${name}${price != null ? ` · ${price} ${currency}` : ""} · Stokta ${stock} adet.`
-          : `${name}${price != null ? ` · ${price} ${currency}` : ""} · Şu an stokta yok.`
+        ? [
+            `${name}${price != null ? ` · ${price} ${currency}` : ""}`,
+            inStock ? `Stokta ${stock} adet.` : "Şu an stokta yok.",
+            featuresHint ? `Özellikler: ${featuresHint}` : null,
+          ]
+            .filter(Boolean)
+            .join(" ")
         : "Ürün bulundu.";
 
   return NextResponse.json({
@@ -98,6 +109,9 @@ export function jsonWaaiProduct<T extends Record<string, unknown>>(product: T) {
     url: product.url ?? null,
     imageUrl: product.imageUrl ?? null,
     shortDescription,
+    /** Admin açıklama alanı — özelliklerin ana kaynağı (Waai flat okur) */
+    description,
+    features: description,
     brand,
     category,
     specs: product.specs ?? undefined,

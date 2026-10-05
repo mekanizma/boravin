@@ -255,6 +255,7 @@ function productSearchWhere(q: string) {
       ilike(products.slug, pattern),
       ilike(products.barcode, pattern),
       ilike(products.shortDescription, pattern),
+      ilike(products.description, pattern),
       ilike(products.seoTitle, pattern),
       ilike(brands.name, pattern),
       ilike(categories.name, pattern),

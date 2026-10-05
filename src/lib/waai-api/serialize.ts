@@ -110,6 +110,11 @@ export function serializeProduct(row: ProductRow, opts?: { detail?: boolean }) {
     sku: row.sku,
     barcode: row.barcode,
     shortDescription: row.shortDescription,
+    /**
+     * Admin “açıklama” alanı — özelliklerin ana kaynağı.
+     * Waai arama listesinde de görmeli; sadece detail’e kilitleme.
+     */
+    description: row.description,
     price: Number(row.price),
     compareAtPrice:
       row.compareAtPrice != null ? Number(row.compareAtPrice) : null,
@@ -152,7 +157,6 @@ export function serializeProduct(row: ProductRow, opts?: { detail?: boolean }) {
 
   return {
     ...base,
-    description: row.description,
     soldCount: row.soldCount ?? 0,
     images,
   };
