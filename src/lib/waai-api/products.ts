@@ -19,6 +19,7 @@ import {
   extractModelSignals,
   extractProductSearchQuery,
   normalizeProductQuery,
+  pickBestProductMatch,
   rankProductMatches,
   sanitizeLikeToken,
   significantTokens,
@@ -470,15 +471,17 @@ function looksLikeUuid(value: string) {
 }
 
 /**
- * Detail lookup — exact identity only (sku / variant sku / barcode / slug / name).
- * Partial / fuzzy name search belongs on GET /products/search?q=...
+ * Detail lookup: exact sku/slug/barcode/name first, then safe ranked
+ * brand+model fallback (WA AI often calls /products/{short name}).
  */
 export async function getProductBySku(sku: string) {
   const raw = clampSearchQuery(sku);
   if (!raw) return null;
 
+  // Strip chat fluff: /products/samsung%20g95nc%20özellikleri
+  const cleaned = extractProductSearchQuery(raw) || normalizeProductQuery(raw) || raw;
   const identityKeys = Array.from(
-    new Set([raw, normalizeProductQuery(raw)].filter(Boolean)),
+    new Set([raw, cleaned, normalizeProductQuery(raw)].filter(Boolean)),
   );
 
   const identityMatchers = identityKeys.flatMap((key) => [
@@ -543,26 +546,53 @@ export async function getProductBySku(sku: string) {
     };
   }
 
-  // Safe normalized exact name match only (not substring / fuzzy).
-  const normalized = normalizeProductQuery(raw);
-  if (!normalized) return null;
+  // Normalized exact name (accent-insensitive).
+  const normalized = normalizeProductQuery(cleaned);
+  if (normalized) {
+    const exactName = await db
+      .select(productSelect)
+      .from(products)
+      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .leftJoin(brands, eq(products.brandId, brands.id))
+      .where(
+        and(
+          eq(products.status, "active"),
+          foldedEquals(products.name, normalized),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
 
-  const exactName = await db
+    if (exactName) {
+      const [enriched] = await enrichProducts([exactName], { detail: true });
+      return enriched ?? null;
+    }
+  }
+
+  // WA AI often hits detail with short brand+model instead of search+SKU.
+  // Reuse the same candidate filter + ranking as searchProducts.
+  const tokens = significantTokens(cleaned);
+  const candidates = await db
     .select(productSelect)
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
     .leftJoin(brands, eq(products.brandId, brands.id))
-    .where(
-      and(
-        eq(products.status, "active"),
-        foldedEquals(products.name, normalized),
-      ),
+    .where(productSearchWhere(cleaned, tokens))
+    .orderBy(
+      desc(productSearchRelevanceSql(cleaned, tokens)),
+      desc(products.stock),
+      asc(products.name),
     )
-    .limit(1)
-    .then((rows) => rows[0] ?? null);
+    .limit(12);
 
-  if (!exactName) return null;
-  const [enriched] = await enrichProducts([exactName], { detail: true });
+  const best = pickBestProductMatch(cleaned, candidates);
+  if (!best) return null;
+
+  // Require a strong match so random brand hits don't resolve as detail.
+  const score = rankProductMatches(cleaned, [best], { minScore: 0 })[0]?.matchScore ?? 0;
+  if (score < 200) return null;
+
+  const [enriched] = await enrichProducts([best], { detail: true });
   return enriched ?? null;
 }
 
