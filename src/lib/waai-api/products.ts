@@ -15,12 +15,14 @@ import {
   type WaaiProductAttribute,
 } from "@/lib/waai-api/serialize";
 import {
+  HIGH_CONFIDENCE_THRESHOLD,
   clampSearchQuery,
+  debugMatchContext,
   extractModelSignals,
   extractProductSearchQuery,
+  isUnambiguousHighConfidence,
   normalizeProductQuery,
-  pickBestProductMatch,
-  rankProductMatches,
+  rankProductMatchesWithConfidence,
   sanitizeLikeToken,
   significantTokens,
 } from "@/lib/waai-api/product-match";
@@ -406,31 +408,20 @@ function productSearchRelevanceSql(cleaned: string, tokens: string[]) {
   return sql`(${sql.join(parts, sql` + `)})`;
 }
 
-export async function searchProducts(opts: {
-  q: string;
-  offset: number;
-  limit: number;
+async function fetchSearchCandidates(cleaned: string, opts?: {
   inStockOnly?: boolean;
+  limit?: number;
 }) {
-  const raw = clampSearchQuery(opts.q);
-  if (!raw) {
-    return { items: [] as ReturnType<typeof serializeProduct>[], total: 0 };
-  }
-
-  // "samsung g95nc özellikleri neler" → "samsung g95nc"
-  const q = extractProductSearchQuery(raw) || normalizeProductQuery(raw) || raw;
-  const tokens = significantTokens(q);
-  const whereParts = [productSearchWhere(q, tokens)];
-  if (opts.inStockOnly) {
+  const tokens = significantTokens(cleaned);
+  const whereParts = [productSearchWhere(cleaned, tokens)];
+  if (opts?.inStockOnly) {
     whereParts.push(gt(products.stock, 0));
   }
   const where = and(...whereParts);
-  const relevance = productSearchRelevanceSql(q, tokens);
+  const relevance = productSearchRelevanceSql(cleaned, tokens);
+  const candidateLimit = Math.min(120, Math.max(opts?.limit ?? 40, 40));
 
-  // Pre-rank in SQL so long-tail model matches are not trimmed by soldCount.
-  const candidateLimit = Math.min(120, Math.max(opts.limit + opts.offset, 40));
-
-  const rows = await db
+  return db
     .select(productSelect)
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
@@ -442,25 +433,82 @@ export async function searchProducts(opts: {
       asc(products.name),
     )
     .limit(candidateLimit);
+}
 
-  const ranked = rankProductMatches(raw, rows, { minScore: 40 });
+function logProductResolve(
+  label: string,
+  raw: string,
+  extras: Record<string, unknown>,
+) {
+  if (process.env.NODE_ENV !== "development") return;
+  const ctx = debugMatchContext(raw);
+  console.info(`[waai:${label}]`, {
+    ...ctx,
+    ...extras,
+  });
+}
+
+export async function searchProducts(opts: {
+  q: string;
+  offset: number;
+  limit: number;
+  inStockOnly?: boolean;
+}) {
+  const raw = clampSearchQuery(opts.q);
+  if (!raw) {
+    return {
+      items: [] as ReturnType<typeof serializeProduct>[],
+      total: 0,
+      bestMatch: null as ReturnType<typeof serializeProduct> | null,
+      bestMatchConfidence: null as number | null,
+    };
+  }
+
+  // "samsung g95nc özellikleri neler" → "samsung g95nc"
+  const q = extractProductSearchQuery(raw) || normalizeProductQuery(raw) || raw;
+  const tokens = significantTokens(q);
+  const candidateLimit = Math.min(120, Math.max(opts.limit + opts.offset, 40));
+  const rows = await fetchSearchCandidates(q, {
+    inStockOnly: opts.inStockOnly,
+    limit: candidateLimit,
+  });
+
+  const ranked = rankProductMatchesWithConfidence(raw, rows, { minScore: 40 });
   const total = ranked.length;
   const page = ranked.slice(opts.offset, opts.offset + opts.limit);
   const items = await enrichProducts(page);
 
-  if (process.env.NODE_ENV === "development") {
-    console.info("[waai:product-search]", {
-      originalQuery: raw,
-      normalizedQuery: q,
-      tokenCount: tokens.length,
-      resultCount: total,
-    });
+  let bestMatch: ReturnType<typeof serializeProduct> | null = null;
+  let bestMatchConfidence: number | null = null;
+  if (isUnambiguousHighConfidence(ranked)) {
+    const top = ranked[0]!;
+    bestMatchConfidence = top.confidence;
+    const [enriched] = await enrichProducts([top], { detail: true });
+    bestMatch = enriched ?? null;
   }
+
+  logProductResolve("product-search", raw, {
+    matchCandidates: ranked.slice(0, 5).map((r) => ({
+      sku: r.sku,
+      name: r.name,
+      matchScore: r.matchScore,
+      confidence: r.confidence,
+    })),
+    selectedProductName: items[0]?.name ?? bestMatch?.name ?? null,
+    selectedSku: items[0]?.sku ?? bestMatch?.sku ?? null,
+    descriptionLength: String(
+      items[0]?.description ?? bestMatch?.description ?? "",
+    ).length,
+    resultCount: total,
+    bestMatchSku: bestMatch?.sku ?? null,
+  });
 
   return {
     items,
     total,
     query: q,
+    bestMatch,
+    bestMatchConfidence,
   };
 }
 
@@ -470,16 +518,49 @@ function looksLikeUuid(value: string) {
   );
 }
 
+export type ResolvedProduct = ReturnType<typeof serializeProduct> & {
+  matchedVariantSku?: string;
+  matchedVariantName?: string;
+  matchedVariantStock?: number;
+};
+
+export type ResolveProductResult = {
+  product: ResolvedProduct | null;
+  confidence: number;
+  matchType:
+    | "exact_sku"
+    | "exact_variant_sku"
+    | "exact_barcode"
+    | "exact_slug"
+    | "exact_name"
+    | "normalized_exact_name"
+    | "high_confidence"
+    | "none";
+  normalizedQuery: string;
+};
+
 /**
- * Detail lookup: exact sku/slug/barcode/name first, then safe ranked
- * brand+model fallback (WA AI often calls /products/{short name}).
+ * Shared product resolver for search / detail / stock.
+ * Exact identity first, then high-confidence fuzzy (brand+model, model code).
  */
-export async function getProductBySku(sku: string) {
-  const raw = clampSearchQuery(sku);
-  if (!raw) return null;
+export async function resolveProduct(
+  identifier: string,
+  opts?: { minConfidence?: number },
+): Promise<ResolveProductResult> {
+  const minConfidence = opts?.minConfidence ?? HIGH_CONFIDENCE_THRESHOLD;
+  const raw = clampSearchQuery(identifier);
+  if (!raw) {
+    return {
+      product: null,
+      confidence: 0,
+      matchType: "none",
+      normalizedQuery: "",
+    };
+  }
 
   // Strip chat fluff: /products/samsung%20g95nc%20özellikleri
-  const cleaned = extractProductSearchQuery(raw) || normalizeProductQuery(raw) || raw;
+  const cleaned =
+    extractProductSearchQuery(raw) || normalizeProductQuery(raw) || raw;
   const identityKeys = Array.from(
     new Set([raw, cleaned, normalizeProductQuery(raw)].filter(Boolean)),
   );
@@ -509,7 +590,44 @@ export async function getProductBySku(sku: string) {
 
   if (row) {
     const [enriched] = await enrichProducts([row], { detail: true });
-    return enriched ?? null;
+    const normalized = normalizeProductQuery(cleaned);
+    const rowNorm = {
+      name: normalizeProductQuery(row.name),
+      sku: normalizeProductQuery(row.sku),
+      slug: normalizeProductQuery(row.slug),
+      barcode: normalizeProductQuery(row.barcode ?? ""),
+    };
+    let matchType: ResolveProductResult["matchType"] = "exact_name";
+    if (identityKeys.some((k) => normalizeProductQuery(k) === rowNorm.sku)) {
+      matchType = "exact_sku";
+    } else if (
+      identityKeys.some((k) => normalizeProductQuery(k) === rowNorm.barcode)
+    ) {
+      matchType = "exact_barcode";
+    } else if (
+      identityKeys.some((k) => normalizeProductQuery(k) === rowNorm.slug)
+    ) {
+      matchType = "exact_slug";
+    } else if (rowNorm.name === normalized) {
+      matchType = "normalized_exact_name";
+    }
+
+    logProductResolve("product-resolve", raw, {
+      matchType,
+      matchScore: 1000,
+      confidence: 1,
+      selectedProductName: enriched?.name ?? row.name,
+      selectedSku: enriched?.sku ?? row.sku,
+      descriptionLength: String(enriched?.description ?? row.description ?? "")
+        .length,
+    });
+
+    return {
+      product: (enriched as ResolvedProduct) ?? null,
+      confidence: 1,
+      matchType,
+      normalizedQuery: cleaned,
+    };
   }
 
   const variant = await db.query.productVariants.findFirst({
@@ -534,16 +652,30 @@ export async function getProductBySku(sku: string) {
       )
       .limit(1)
       .then((rows) => rows[0] ?? null);
-    if (!parent) return null;
-
-    const [enriched] = await enrichProducts([parent], { detail: true });
-    if (!enriched) return null;
-    return {
-      ...enriched,
-      matchedVariantSku: variant.sku,
-      matchedVariantName: variant.name,
-      matchedVariantStock: variant.stock,
-    };
+    if (parent) {
+      const [enriched] = await enrichProducts([parent], { detail: true });
+      if (enriched) {
+        const product = {
+          ...enriched,
+          matchedVariantSku: variant.sku,
+          matchedVariantName: variant.name,
+          matchedVariantStock: variant.stock,
+        } as ResolvedProduct;
+        logProductResolve("product-resolve", raw, {
+          matchType: "exact_variant_sku",
+          confidence: 1,
+          selectedProductName: product.name,
+          selectedSku: product.sku,
+          descriptionLength: String(product.description ?? "").length,
+        });
+        return {
+          product,
+          confidence: 1,
+          matchType: "exact_variant_sku",
+          normalizedQuery: cleaned,
+        };
+      }
+    }
   }
 
   // Normalized exact name (accent-insensitive).
@@ -565,35 +697,86 @@ export async function getProductBySku(sku: string) {
 
     if (exactName) {
       const [enriched] = await enrichProducts([exactName], { detail: true });
-      return enriched ?? null;
+      logProductResolve("product-resolve", raw, {
+        matchType: "normalized_exact_name",
+        confidence: 1,
+        selectedProductName: enriched?.name ?? exactName.name,
+        selectedSku: enriched?.sku ?? exactName.sku,
+        descriptionLength: String(
+          enriched?.description ?? exactName.description ?? "",
+        ).length,
+      });
+      return {
+        product: (enriched as ResolvedProduct) ?? null,
+        confidence: 1,
+        matchType: "normalized_exact_name",
+        normalizedQuery: cleaned,
+      };
     }
   }
 
-  // WA AI often hits detail with short brand+model instead of search+SKU.
-  // Reuse the same candidate filter + ranking as searchProducts.
-  const tokens = significantTokens(cleaned);
-  const candidates = await db
-    .select(productSelect)
-    .from(products)
-    .leftJoin(categories, eq(products.categoryId, categories.id))
-    .leftJoin(brands, eq(products.brandId, brands.id))
-    .where(productSearchWhere(cleaned, tokens))
-    .orderBy(
-      desc(productSearchRelevanceSql(cleaned, tokens)),
-      desc(products.stock),
-      asc(products.name),
-    )
-    .limit(12);
+  // Partial / fuzzy: same candidate filter + ranking as search.
+  const candidates = await fetchSearchCandidates(cleaned, { limit: 24 });
+  const ranked = rankProductMatchesWithConfidence(cleaned, candidates, {
+    minScore: 40,
+  });
 
-  const best = pickBestProductMatch(cleaned, candidates);
-  if (!best) return null;
+  if (!isUnambiguousHighConfidence(ranked, minConfidence)) {
+    logProductResolve("product-resolve", raw, {
+      matchType: "none",
+      confidence: ranked[0]?.confidence ?? 0,
+      matchCandidates: ranked.slice(0, 5).map((r) => ({
+        sku: r.sku,
+        name: r.name,
+        matchScore: r.matchScore,
+        confidence: r.confidence,
+      })),
+      selectedProductName: null,
+      selectedSku: null,
+      descriptionLength: 0,
+    });
+    return {
+      product: null,
+      confidence: ranked[0]?.confidence ?? 0,
+      matchType: "none",
+      normalizedQuery: cleaned,
+    };
+  }
 
-  // Require a strong match so random brand hits don't resolve as detail.
-  const score = rankProductMatches(cleaned, [best], { minScore: 0 })[0]?.matchScore ?? 0;
-  if (score < 200) return null;
-
+  const best = ranked[0]!;
+  const confidence = best.confidence;
   const [enriched] = await enrichProducts([best], { detail: true });
-  return enriched ?? null;
+
+  logProductResolve("product-resolve", raw, {
+    matchType: "high_confidence",
+    matchScore: best.matchScore,
+    confidence,
+    matchCandidates: ranked.slice(0, 5).map((r) => ({
+      sku: r.sku,
+      name: r.name,
+      matchScore: r.matchScore,
+      confidence: r.confidence,
+    })),
+    selectedProductName: enriched?.name ?? best.name,
+    selectedSku: enriched?.sku ?? best.sku,
+    descriptionLength: String(enriched?.description ?? best.description ?? "")
+      .length,
+  });
+
+  return {
+    product: (enriched as ResolvedProduct) ?? null,
+    confidence,
+    matchType: "high_confidence",
+    normalizedQuery: cleaned,
+  };
+}
+
+/**
+ * Detail lookup via shared resolveProduct (exact first, then high-confidence).
+ */
+export async function getProductBySku(sku: string) {
+  const resolved = await resolveProduct(sku);
+  return resolved.product;
 }
 
 export async function getRecommendations(opts: {

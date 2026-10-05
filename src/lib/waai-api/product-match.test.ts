@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  HIGH_CONFIDENCE_THRESHOLD,
   MAX_SEARCH_QUERY_LENGTH,
   clampSearchQuery,
   extractModelSignals,
   extractProductSearchQuery,
   isModelCodeToken,
+  isUnambiguousHighConfidence,
+  matchConfidence,
   normalizeProductQuery,
   pickBestProductMatch,
   rankProductMatches,
+  rankProductMatchesWithConfidence,
   scoreProductMatch,
   significantTokens,
 } from "@/lib/waai-api/product-match";
@@ -283,6 +287,50 @@ describe("identity and other match modes", () => {
     expect(ranked[0]?.sku).toBe("LS57CG952NUXEN");
     expect(ranked[0]!.matchScore).toBeGreaterThan(
       scoreProductMatch("Samsung G95NC", rows[0]!),
+    );
+  });
+});
+
+describe("confidence / ambiguous resolve", () => {
+  it("gives high confidence to brand+model and model-code queries", () => {
+    expect(matchConfidence("Samsung G95NC", catalog[0]!)).toBeGreaterThanOrEqual(
+      HIGH_CONFIDENCE_THRESHOLD,
+    );
+    expect(matchConfidence("G95NC", catalog[0]!)).toBeGreaterThanOrEqual(
+      HIGH_CONFIDENCE_THRESHOLD,
+    );
+    expect(matchConfidence("LS57CG952NUXEN", catalog[0]!)).toBe(1);
+  });
+
+  it("does not give high confidence to sibling Odyssey models for G95NC", () => {
+    expect(matchConfidence("G95NC", catalog[1]!)).toBeLessThan(
+      HIGH_CONFIDENCE_THRESHOLD,
+    );
+    expect(matchConfidence("G95NC", catalog[2]!)).toBeLessThan(
+      HIGH_CONFIDENCE_THRESHOLD,
+    );
+  });
+
+  it("treats G95NC as unambiguous high-confidence among siblings", () => {
+    const ranked = rankProductMatchesWithConfidence("G95NC", catalog);
+    expect(ranked[0]?.sku).toBe("LS57CG952NUXEN");
+    expect(isUnambiguousHighConfidence(ranked)).toBe(true);
+  });
+
+  it("does not auto-resolve broad brand queries", () => {
+    const ranked = rankProductMatchesWithConfidence("Samsung", catalog, {
+      minScore: 1,
+    });
+    expect(isUnambiguousHighConfidence(ranked)).toBe(false);
+  });
+
+  it("strips natural-language fluff including teknik özellik / kaç para", () => {
+    expect(
+      extractProductSearchQuery("Samsung G95NC teknik özellikleri nedir"),
+    ).toBe("samsung g95nc");
+    expect(extractProductSearchQuery("G95NC stokta mı")).toBe("g95nc");
+    expect(extractProductSearchQuery("Samsung G95NC kaç para")).toBe(
+      "samsung g95nc",
     );
   });
 });

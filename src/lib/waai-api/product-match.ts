@@ -25,10 +25,18 @@ export function normalizeProductQuery(value: string) {
 
 /** Multi-word chat fluff removed before tokenization (non-aggressive). */
 const STOP_PHRASES = [
+  "teknik ozellikleri",
+  "teknik özellikleri",
   "ozellikleri nedir",
+  "özellikleri nedir",
   "ozellikleri neler",
+  "özellikleri neler",
   "ozellikleri nelerdir",
+  "özellikleri nelerdir",
   "ozellikleri ne",
+  "özellikleri ne",
+  "bilgi verir misin",
+  "bilgi verir mısın",
   "fiyati nedir",
   "fiyatı nedir",
   "tell me about",
@@ -37,9 +45,13 @@ const STOP_PHRASES = [
   "stokta mı",
   "var mi",
   "var mı",
+  "kac para",
+  "kaç para",
   "specifications",
   "ozellikleri",
   "özellikleri",
+  "ozelligi",
+  "özelliği",
   "ozellikler",
   "özellikler",
   "ozellik",
@@ -59,6 +71,7 @@ const STOP_PHRASES = [
   "göster",
   "ariyorum",
   "arıyorum",
+  "bilgi",
   "bul",
   "price",
   "spec",
@@ -68,9 +81,12 @@ const INTENT_WORDS = new Set([
   "ozellik",
   "ozellikleri",
   "ozellikler",
+  "ozelligi",
   "özellik",
   "özellikleri",
   "özellikler",
+  "özelliği",
+  "teknik",
   "spec",
   "specs",
   "specifications",
@@ -116,7 +132,15 @@ const INTENT_WORDS = new Set([
   "isterim",
   "alabilir",
   "miyim",
+  "bilgi",
+  "verir",
+  "kac",
+  "kaç",
+  "para",
 ]);
+
+/** Confidence threshold for detail / stock auto-resolve. */
+export const HIGH_CONFIDENCE_THRESHOLD = 0.9;
 
 const STOP_WORDS = new Set([
   "ve",
@@ -455,4 +479,121 @@ export function pickBestProductMatch<T extends RankableProduct>(
   if (rows.length === 1) return rows[0] ?? null;
   const ranked = rankProductMatches(query, rows);
   return ranked[0] ?? null;
+}
+
+/**
+ * Map a product match to 0–1 confidence for detail/stock auto-resolve.
+ * Prefer match-type semantics over raw ranking score.
+ */
+export function matchConfidence(query: string, row: RankableProduct): number {
+  const cleaned = extractProductSearchQuery(query) || normalizeProductQuery(query);
+  const tokens = significantTokens(cleaned);
+  const normalizedQuery = normalizeProductQuery(cleaned);
+  const modelSignals = extractModelSignals(tokens);
+  const fields = identityHaystacks(row);
+
+  if (!normalizedQuery) return 0;
+
+  if (fields.sku && fields.sku === normalizedQuery) return 1;
+  if (fields.variantSkus.some((v) => v === normalizedQuery)) return 1;
+  if (fields.barcode && fields.barcode === normalizedQuery) return 1;
+  if (fields.slug && fields.slug === normalizedQuery) return 1;
+  if (fields.name === normalizedQuery) return 1;
+
+  const modelExactInName = modelSignals.some((signal) =>
+    hasExactToken(fields.name, signal.joined),
+  );
+  const modelHit = modelSignals.some(
+    (signal) =>
+      modelSignalMatches(fields.name, signal) ||
+      modelSignalMatches(fields.sku, signal) ||
+      modelSignalMatches(fields.slug, signal) ||
+      fields.variantSkus.some((v) => modelSignalMatches(v, signal)),
+  );
+  const brandTokenHit =
+    (!!fields.brand &&
+      tokens.some((t) => t === fields.brand || hasExactToken(fields.brand, t))) ||
+    tokens.some((t) => hasExactToken(fields.name, t) && t === fields.brand);
+
+  // Brand may appear only in product name (not brand join).
+  const brandInName = tokens.some(
+    (t) =>
+      t.length >= 3 &&
+      !isModelCodeToken(t) &&
+      !isDigitToken(t) &&
+      hasExactToken(fields.name, t) &&
+      (t === fields.brand || (!!fields.brand && fields.brand.includes(t))),
+  );
+  const brandHit = brandTokenHit || brandInName;
+
+  if (brandHit && modelExactInName) return 0.99;
+  if (modelExactInName) return 0.98;
+  if (brandHit && modelHit) return 0.99;
+
+  const allTokensInName =
+    tokens.length > 0 && tokens.every((t) => fields.name.includes(t));
+  if (allTokensInName) return 0.95;
+  if (normalizedQuery.length >= 2 && fields.name.includes(normalizedQuery)) {
+    return 0.95;
+  }
+  if (normalizedQuery.length >= 2 && fields.name.startsWith(normalizedQuery)) {
+    return 0.95;
+  }
+
+  if (modelHit) return 0.88;
+
+  const coverage =
+    tokens.length > 0
+      ? tokens.filter((t) => fields.name.includes(t)).length / tokens.length
+      : 0;
+  if (coverage >= 0.75) return 0.85;
+  if (coverage >= 0.5) return 0.72;
+  if (coverage > 0) return 0.55;
+  return 0;
+}
+
+export type ConfidenceRanked<T> = T & {
+  matchScore: number;
+  confidence: number;
+};
+
+export function rankProductMatchesWithConfidence<T extends RankableProduct>(
+  query: string,
+  rows: T[],
+  opts?: { minScore?: number },
+): ConfidenceRanked<T>[] {
+  return rankProductMatches(query, rows, opts).map((row) => ({
+    ...row,
+    confidence: matchConfidence(query, row),
+  }));
+}
+
+/**
+ * True when top match is high-confidence and not tied with another strong candidate.
+ * Prevents "Samsung monitor" from auto-resolving to a random Samsung SKU.
+ */
+export function isUnambiguousHighConfidence<T extends { confidence: number }>(
+  ranked: T[],
+  threshold = HIGH_CONFIDENCE_THRESHOLD,
+): boolean {
+  const top = ranked[0];
+  if (!top || top.confidence < threshold) return false;
+  const second = ranked[1];
+  if (!second) return true;
+  if (second.confidence < threshold) return true;
+  return top.confidence - second.confidence >= 0.05;
+}
+
+export function debugMatchContext(query: string) {
+  const raw = clampSearchQuery(query);
+  const normalized = normalizeProductQuery(raw);
+  const cleaned = extractProductSearchQuery(raw) || normalized;
+  const tokens = significantTokens(cleaned);
+  const modelCodes = extractModelSignals(tokens).map((s) => s.joined);
+  return {
+    incoming: raw,
+    normalizedQuery: cleaned,
+    queryTokens: tokens,
+    detectedModelCodes: modelCodes,
+  };
 }

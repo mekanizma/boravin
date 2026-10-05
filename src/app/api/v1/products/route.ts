@@ -33,8 +33,19 @@ export async function GET(request: Request) {
         inStockOnly,
       });
 
+  const bestMatch =
+    q && "bestMatch" in result
+      ? (result.bestMatch as Record<string, unknown> | null)
+      : null;
+  const bestMatchConfidence =
+    q && "bestMatchConfidence" in result
+      ? (result.bestMatchConfidence as number | null)
+      : null;
+
   return jsonWaaiProductList(result.items as Array<Record<string, unknown>>, {
     ...(q ? { query: q } : {}),
+    bestMatch,
+    bestMatchConfidence,
     pagination: {
       page,
       limit,

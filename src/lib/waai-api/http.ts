@@ -18,22 +18,26 @@ export function jsonWaaiProductList<T extends Record<string, unknown>>(
     status?: number;
     query?: string;
     pagination?: Record<string, unknown>;
+    /** High-confidence full product (includes description/features). */
+    bestMatch?: T | null;
+    bestMatchConfidence?: number | null;
   },
 ) {
   const query = meta?.query;
-  const first = items[0];
+  const bestMatch = meta?.bestMatch ?? null;
+  const primary = bestMatch ?? items[0];
   const firstName =
-    first && typeof first.name === "string"
-      ? first.name
-      : first && typeof first.title === "string"
-        ? first.title
+    primary && typeof primary.name === "string"
+      ? primary.name
+      : primary && typeof primary.title === "string"
+        ? primary.title
         : null;
-  const firstSku = first && typeof first.sku === "string" ? first.sku : null;
+  const firstSku = primary && typeof primary.sku === "string" ? primary.sku : null;
   const firstDescRaw =
-    first && typeof first.description === "string" && first.description.trim()
-      ? first.description
-      : first && typeof first.features === "string" && first.features.trim()
-        ? first.features
+    primary && typeof primary.description === "string" && primary.description.trim()
+      ? primary.description
+      : primary && typeof primary.features === "string" && primary.features.trim()
+        ? primary.features
         : null;
   const firstFeatures = firstDescRaw ? stripHtml(firstDescRaw).slice(0, 500) : null;
 
@@ -66,10 +70,16 @@ export function jsonWaaiProductList<T extends Record<string, unknown>>(
       data: items,
       count: items.length,
       message,
-      // Flat aliases when a single strong match — WA AI shortcut readers
-      ...(items.length === 1 && first
+      ...(bestMatch
         ? {
-            product: first,
+            bestMatch,
+            bestMatchConfidence: meta?.bestMatchConfidence ?? null,
+          }
+        : {}),
+      // Flat aliases when a single strong match — WA AI shortcut readers
+      ...((items.length === 1 || bestMatch) && primary
+        ? {
+            product: primary,
             name: firstName,
             title: firstName,
             sku: firstSku,

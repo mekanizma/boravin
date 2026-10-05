@@ -41,9 +41,19 @@ export async function GET(request: Request) {
   const total = result.total;
   const queryLabel =
     isProbe || !("query" in result) ? q : (result.query as string);
+  const bestMatch =
+    !isProbe && "bestMatch" in result
+      ? (result.bestMatch as Record<string, unknown> | null)
+      : null;
+  const bestMatchConfidence =
+    !isProbe && "bestMatchConfidence" in result
+      ? (result.bestMatchConfidence as number | null)
+      : null;
 
   return jsonWaaiProductList(items as Array<Record<string, unknown>>, {
     query: queryLabel,
+    bestMatch,
+    bestMatchConfidence,
     pagination: {
       page,
       limit,
