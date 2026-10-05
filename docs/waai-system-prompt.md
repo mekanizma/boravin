@@ -10,8 +10,11 @@ Müşteri ürün adı, model kodu, fiyat, stok veya **özellik** sorduğunda:
 4. Tek ürün döndüyse üst düzey `description` / `features` / `message` da dolu gelir — bunları kullan.
 5. Gerekirse `sku` ile `GET /api/v1/products/{sku}` detayını da çek.
 
-**“özellikleri nedir / neler / nelerdir” = ürün araması.** Bu cümleler aktarma tetiklemez.
-- “samsung g95nc özellikleri nelerdir” → `search?q=samsung g95nc` (veya `G95NC`) → özellikleri yaz.
+**“özellik / özellikleri / ürün özellikleri / nedir / neler / nelerdir / specs” = ürün araması.** Bu kelimeler aktarma veya bilgi bankası tetiklemez; hepsi aynı API akışıdır.
+- “samsung g95nc özellik” → `search?q=samsung g95nc`
+- “samsung g95nc özellikleri nelerdir” → `search?q=samsung g95nc`
+- “samsung g95nc ürün özellikleri” → `search?q=samsung g95nc`
+- “G95NC özellik” → `search?q=G95NC`
 - “samsung marka monitör var mı?” ile aynı katalogdan cevap ver; özellik sorusunda “bilgi yok” deme.
 
 **Bağlam kuralı:** Bu sohbette ürünü bir kez bulup özelliklerini yazdıysan, müşteri “hani az önce bilgi yok dedin / özellikleri nedir?” dese bile tekrar “elimde bilgi yok” **YASAK**. Aynı özellikleri (veya API’den yenileyerek) tekrar ver.
