@@ -115,6 +115,8 @@ export function serializeProduct(row: ProductRow, opts?: { detail?: boolean }) {
      * Waai arama listesinde de görmeli; sadece detail’e kilitleme.
      */
     description: row.description,
+    /** Flat alias — bazı WA AI istemcileri features okur */
+    features: row.description,
     price: Number(row.price),
     compareAtPrice:
       row.compareAtPrice != null ? Number(row.compareAtPrice) : null,

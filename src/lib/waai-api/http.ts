@@ -7,6 +7,10 @@ export function jsonOk<T>(data: T, init?: { status?: number }) {
   );
 }
 
+function stripHtml(value: string) {
+  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 /** Waai / website-api.client expects `products`, `items`, or an array `data`. */
 export function jsonWaaiProductList<T extends Record<string, unknown>>(
   items: T[],
@@ -17,14 +21,41 @@ export function jsonWaaiProductList<T extends Record<string, unknown>>(
   },
 ) {
   const query = meta?.query;
-  const message =
-    items.length === 0
-      ? query
-        ? `"${query}" için ürün bulunamadı.`
-        : "Ürün bulunamadı."
-      : query
-        ? `"${query}" için ${items.length} ürün bulundu.`
-        : `${items.length} ürün listelendi.`;
+  const first = items[0];
+  const firstName =
+    first && typeof first.name === "string"
+      ? first.name
+      : first && typeof first.title === "string"
+        ? first.title
+        : null;
+  const firstSku = first && typeof first.sku === "string" ? first.sku : null;
+  const firstDescRaw =
+    first && typeof first.description === "string" && first.description.trim()
+      ? first.description
+      : first && typeof first.features === "string" && first.features.trim()
+        ? first.features
+        : null;
+  const firstFeatures = firstDescRaw ? stripHtml(firstDescRaw).slice(0, 500) : null;
+
+  let message: string;
+  if (items.length === 0) {
+    message = query
+      ? `"${query}" için ürün bulunamadı.`
+      : "Ürün bulunamadı.";
+  } else if (items.length === 1 && firstName) {
+    // WA AI often only reads top-level `message` — embed features there.
+    message = [
+      `"${query ?? firstName}" için 1 ürün bulundu: ${firstName}`,
+      firstSku ? `SKU: ${firstSku}.` : null,
+      firstFeatures ? `Özellikler: ${firstFeatures}` : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  } else {
+    message = query
+      ? `"${query}" için ${items.length} ürün bulundu.`
+      : `${items.length} ürün listelendi.`;
+  }
 
   return NextResponse.json(
     {
@@ -35,6 +66,17 @@ export function jsonWaaiProductList<T extends Record<string, unknown>>(
       data: items,
       count: items.length,
       message,
+      // Flat aliases when a single strong match — WA AI shortcut readers
+      ...(items.length === 1 && first
+        ? {
+            product: first,
+            name: firstName,
+            title: firstName,
+            sku: firstSku,
+            description: firstDescRaw,
+            features: firstDescRaw,
+          }
+        : {}),
       ...(query ? { query } : {}),
       ...(meta?.pagination ? { pagination: meta.pagination } : {}),
     },
