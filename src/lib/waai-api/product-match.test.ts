@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  extractProductSearchQuery,
   normalizeProductQuery,
   pickBestProductMatch,
   significantTokens,
@@ -12,12 +13,30 @@ describe("normalizeProductQuery", () => {
   });
 });
 
+describe("extractProductSearchQuery", () => {
+  it("strips feature/price chat fluff", () => {
+    expect(extractProductSearchQuery("samsung g95nc özellikleri neler")).toBe(
+      "samsung g95nc",
+    );
+    expect(
+      extractProductSearchQuery("Samsung G95NC özellikleri nedir?"),
+    ).toBe("samsung g95nc");
+    expect(extractProductSearchQuery("iphone 15 fiyatı ne kadar")).toBe(
+      "iphone 15",
+    );
+  });
+});
+
 describe("significantTokens", () => {
-  it("drops stop words", () => {
+  it("drops stop words and intent words", () => {
     expect(significantTokens("iPhone 16 ve Pro model")).toEqual([
       "iphone",
       "16",
       "pro",
+    ]);
+    expect(significantTokens("samsung g95nc özellikleri neler")).toEqual([
+      "samsung",
+      "g95nc",
     ]);
   });
 });
@@ -26,7 +45,7 @@ describe("pickBestProductMatch", () => {
   const catalog = [
     { name: "Samsung QLED 65", sku: "BV-MOCK-1028", soldCount: 33 },
     {
-      name: "Samsung G95NC PC düz ekran monitörü",
+      name: "Samsung G95NC PC Düz Ekran Monitörü",
       sku: "LS57CG952NUXEN",
       soldCount: 1,
     },
@@ -47,6 +66,18 @@ describe("pickBestProductMatch", () => {
     expect(pickBestProductMatch("Epson T7700DM", catalog)?.sku).toBe(
       "C11CH84301A0",
     );
+  });
+
+  it("matches short brand+model even with feature question words", () => {
+    expect(
+      pickBestProductMatch("samsung g95nc özellikleri neler", catalog)?.sku,
+    ).toBe("LS57CG952NUXEN");
+    expect(
+      pickBestProductMatch(
+        "Samsung G95NC PC Düz Ekran Monitörü özellikleri nelerdir",
+        catalog,
+      )?.sku,
+    ).toBe("LS57CG952NUXEN");
   });
 
   it("ranks iPhone queries sensibly", () => {

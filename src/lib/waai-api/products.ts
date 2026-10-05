@@ -15,6 +15,7 @@ import {
   type WaaiProductAttribute,
 } from "@/lib/waai-api/serialize";
 import {
+  extractProductSearchQuery,
   pickBestProductMatch,
   scoreProductMatch,
   significantTokens,
@@ -277,10 +278,13 @@ export async function searchProducts(opts: {
   offset: number;
   limit: number;
 }) {
-  const q = opts.q.trim();
-  if (!q) {
+  const raw = opts.q.trim();
+  if (!raw) {
     return { items: [] as ReturnType<typeof serializeProduct>[], total: 0 };
   }
+
+  // "samsung g95nc özellikleri neler" → "samsung g95nc"
+  const q = extractProductSearchQuery(raw) || raw;
 
   const where = productSearchWhere(q);
   // Fetch a ranked candidate window — Waai catalogs are small; relevance > SQL offset.
@@ -316,19 +320,22 @@ function looksLikeUuid(value: string) {
 }
 
 export async function getProductBySku(sku: string) {
-  const normalized = sku.trim();
-  if (!normalized) return null;
+  const raw = sku.trim();
+  if (!raw) return null;
+  // Accept chat-style paths: /products/samsung%20g95nc%20özellikleri
+  const cleaned = extractProductSearchQuery(raw) || raw;
+  const identityKeys = Array.from(new Set([raw, cleaned]));
 
-  const identityMatchers = [
-    eq(products.sku, normalized),
-    eq(products.slug, normalized),
-    eq(products.barcode, normalized),
-    ilike(products.sku, normalized),
-    ilike(products.slug, normalized),
-    ilike(products.barcode, normalized),
-  ];
-  if (looksLikeUuid(normalized)) {
-    identityMatchers.push(eq(products.id, normalized));
+  const identityMatchers = identityKeys.flatMap((key) => [
+    eq(products.sku, key),
+    eq(products.slug, key),
+    eq(products.barcode, key),
+    ilike(products.sku, key),
+    ilike(products.slug, key),
+    ilike(products.barcode, key),
+  ]);
+  for (const key of identityKeys) {
+    if (looksLikeUuid(key)) identityMatchers.push(eq(products.id, key));
   }
 
   const row = await db
@@ -344,8 +351,10 @@ export async function getProductBySku(sku: string) {
     const variant = await db.query.productVariants.findFirst({
       where: and(
         or(
-          eq(productVariants.sku, normalized),
-          ilike(productVariants.sku, normalized),
+          ...identityKeys.flatMap((key) => [
+            eq(productVariants.sku, key),
+            ilike(productVariants.sku, key),
+          ]),
         ),
         eq(productVariants.isActive, true),
       ),
@@ -373,17 +382,17 @@ export async function getProductBySku(sku: string) {
       };
     }
 
-    // WhatsApp often sends product title instead of SKU — rank, don't take SQL order.
+    // WhatsApp often sends short brand+model instead of full title.
     const candidates = await db
       .select(productSelect)
       .from(products)
       .leftJoin(categories, eq(products.categoryId, categories.id))
       .leftJoin(brands, eq(products.brandId, brands.id))
-      .where(productSearchWhere(normalized))
+      .where(productSearchWhere(cleaned))
       .orderBy(desc(products.soldCount), desc(products.isFeatured))
       .limit(12);
 
-    const best = pickBestProductMatch(normalized, candidates);
+    const best = pickBestProductMatch(cleaned, candidates);
     if (!best) return null;
 
     const [enriched] = await enrichProducts([best], { detail: true });
