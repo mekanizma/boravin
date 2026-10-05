@@ -15,11 +15,19 @@ import {
   type WaaiProductAttribute,
 } from "@/lib/waai-api/serialize";
 import {
+  clampSearchQuery,
+  extractModelSignals,
   extractProductSearchQuery,
-  pickBestProductMatch,
-  scoreProductMatch,
+  normalizeProductQuery,
+  rankProductMatches,
+  sanitizeLikeToken,
   significantTokens,
 } from "@/lib/waai-api/product-match";
+
+/** Postgres fold for Turkish letters so "monitor" matches "Monitörü". */
+function sqlFold(column: unknown) {
+  return sql`translate(lower(coalesce(${column}, '')), 'ığüşöç', 'igusoc')`;
+}
 
 type ProductImageRow = {
   url: string;
@@ -245,49 +253,180 @@ export async function listProducts(opts: {
   };
 }
 
-function productSearchWhere(q: string) {
-  const pattern = `%${q}%`;
-  const tokens = significantTokens(q);
+function foldedLike(column: unknown, token: string) {
+  const safe = sanitizeLikeToken(token);
+  if (!safe) return sql`false`;
+  return sql`${sqlFold(column)} like ${`%${safe}%`}`;
+}
+
+function foldedEquals(column: unknown, token: string) {
+  const safe = sanitizeLikeToken(token);
+  if (!safe) return sql`false`;
+  return sql`${sqlFold(column)} = ${safe}`;
+}
+
+/**
+ * Candidate filter for product search.
+ * When the query contains a model code, do NOT OR-match bare brand tokens
+ * (that flooded the candidate window and dropped long-tail SKUs).
+ */
+function productSearchWhere(cleaned: string, tokens: string[]) {
+  const q = sanitizeLikeToken(cleaned);
+  const safeTokens = tokens.map(sanitizeLikeToken).filter(Boolean);
+  const modelSignals = extractModelSignals(safeTokens);
+  const modelTokens = modelSignals.map((s) => s.joined);
+
+  const identityExact = or(
+    foldedEquals(products.sku, q),
+    foldedEquals(products.slug, q),
+    foldedEquals(products.barcode, q),
+    foldedEquals(products.name, q),
+  );
+
+  const fullSubstring = or(
+    foldedLike(products.name, q),
+    foldedLike(products.sku, q),
+    foldedLike(products.slug, q),
+    foldedLike(products.barcode, q),
+  );
+
+  const variantMatch = (patternToken: string) => {
+    const safe = sanitizeLikeToken(patternToken);
+    if (!safe) return sql`false`;
+    const like = `%${safe}%`;
+    return sql`exists (
+      select 1 from product_variants v
+      where v.product_id = ${products.id}
+        and v.is_active = true
+        and (
+          translate(lower(coalesce(v.sku, '')), 'ığüşöç', 'igusoc') like ${like}
+          or translate(lower(coalesce(v.name, '')), 'ığüşöç', 'igusoc') like ${like}
+        )
+    )`;
+  };
+
+  const modelMatchers =
+    modelTokens.length > 0
+      ? or(
+          ...modelTokens.flatMap((token) => [
+            foldedLike(products.name, token),
+            foldedLike(products.sku, token),
+            foldedLike(products.slug, token),
+            variantMatch(token),
+          ]),
+        )
+      : undefined;
+
+  const allTokensInName =
+    safeTokens.length >= 2
+      ? and(...safeTokens.map((token) => foldedLike(products.name, token)))
+      : undefined;
+
+  // Model-code queries: only products that carry the model (or exact/full hit).
+  if (modelTokens.length > 0) {
+    return and(
+      eq(products.status, "active"),
+      or(identityExact, fullSubstring, modelMatchers),
+    );
+  }
+
+  // Multi-token brand+words: require all tokens in name, or identity/full/brand.
+  if (safeTokens.length >= 2) {
+    return and(
+      eq(products.status, "active"),
+      or(
+        identityExact,
+        fullSubstring,
+        allTokensInName,
+        and(
+          foldedLike(brands.name, safeTokens[0]!),
+          ...safeTokens.slice(1).map((token) => foldedLike(products.name, token)),
+        ),
+        variantMatch(q),
+      ),
+    );
+  }
+
+  // Single-token / broad fallback
+  const pattern = q;
   return and(
     eq(products.status, "active"),
     or(
-      ilike(products.name, pattern),
-      ilike(products.sku, pattern),
-      ilike(products.slug, pattern),
-      ilike(products.barcode, pattern),
-      ilike(products.shortDescription, pattern),
-      ilike(products.description, pattern),
-      ilike(products.seoTitle, pattern),
-      ilike(brands.name, pattern),
-      ilike(categories.name, pattern),
-      sql`exists (
-        select 1 from product_variants v
-        where v.product_id = ${products.id}
-          and v.is_active = true
-          and v.sku ilike ${pattern}
-      )`,
-      ...(tokens.length > 0
-        ? tokens.map((token) => ilike(products.name, `%${token}%`))
+      identityExact,
+      fullSubstring,
+      foldedLike(products.shortDescription, pattern),
+      foldedLike(products.description, pattern),
+      foldedLike(products.seoTitle, pattern),
+      foldedLike(brands.name, pattern),
+      foldedLike(categories.name, pattern),
+      variantMatch(pattern),
+      ...(safeTokens.length === 1
+        ? [foldedLike(products.name, safeTokens[0]!)]
         : []),
     ),
   );
+}
+
+/** Cheap SQL pre-rank so the candidate window keeps model hits first. */
+function productSearchRelevanceSql(cleaned: string, tokens: string[]) {
+  const q = sanitizeLikeToken(cleaned);
+  const safeTokens = tokens.map(sanitizeLikeToken).filter(Boolean);
+  const modelTokens = extractModelSignals(safeTokens).map((s) => s.joined);
+
+  const parts: ReturnType<typeof sql>[] = [
+    sql`case when ${foldedEquals(products.sku, q)} then 1000 else 0 end`,
+    sql`case when ${foldedEquals(products.barcode, q)} then 950 else 0 end`,
+    sql`case when ${foldedEquals(products.slug, q)} then 900 else 0 end`,
+    sql`case when ${foldedEquals(products.name, q)} then 850 else 0 end`,
+    sql`case when ${sqlFold(products.name)} like ${`${q}%`} then 800 else 0 end`,
+    sql`case when ${foldedLike(products.name, q)} then 750 else 0 end`,
+  ];
+
+  if (safeTokens.length >= 2) {
+    parts.push(
+      sql`case when ${and(
+        ...safeTokens.map((token) => foldedLike(products.name, token)),
+      )} then 700 else 0 end`,
+    );
+  }
+
+  for (const token of modelTokens) {
+    parts.push(
+      sql`case when ${foldedLike(products.name, token)} then 300 else 0 end`,
+    );
+  }
+
+  if (safeTokens[0]) {
+    parts.push(
+      sql`case when ${foldedLike(brands.name, safeTokens[0])} then 150 else 0 end`,
+    );
+  }
+
+  return sql`(${sql.join(parts, sql` + `)})`;
 }
 
 export async function searchProducts(opts: {
   q: string;
   offset: number;
   limit: number;
+  inStockOnly?: boolean;
 }) {
-  const raw = opts.q.trim();
+  const raw = clampSearchQuery(opts.q);
   if (!raw) {
     return { items: [] as ReturnType<typeof serializeProduct>[], total: 0 };
   }
 
   // "samsung g95nc özellikleri neler" → "samsung g95nc"
-  const q = extractProductSearchQuery(raw) || raw;
+  const q = extractProductSearchQuery(raw) || normalizeProductQuery(raw) || raw;
+  const tokens = significantTokens(q);
+  const whereParts = [productSearchWhere(q, tokens)];
+  if (opts.inStockOnly) {
+    whereParts.push(gt(products.stock, 0));
+  }
+  const where = and(...whereParts);
+  const relevance = productSearchRelevanceSql(q, tokens);
 
-  const where = productSearchWhere(q);
-  // Fetch a ranked candidate window — Waai catalogs are small; relevance > SQL offset.
+  // Pre-rank in SQL so long-tail model matches are not trimmed by soldCount.
   const candidateLimit = Math.min(120, Math.max(opts.limit + opts.offset, 40));
 
   const rows = await db
@@ -296,16 +435,27 @@ export async function searchProducts(opts: {
     .leftJoin(categories, eq(products.categoryId, categories.id))
     .leftJoin(brands, eq(products.brandId, brands.id))
     .where(where)
-    .orderBy(desc(products.isFeatured), desc(products.soldCount))
+    .orderBy(
+      desc(relevance),
+      desc(products.stock),
+      asc(products.name),
+    )
     .limit(candidateLimit);
 
-  // Sort by relevance but keep all SQL hits (variant SKU / slug matches included).
-  const ranked = [...rows].sort(
-    (a, b) => scoreProductMatch(q, b) - scoreProductMatch(q, a),
-  );
+  const ranked = rankProductMatches(raw, rows, { minScore: 40 });
   const total = ranked.length;
   const page = ranked.slice(opts.offset, opts.offset + opts.limit);
   const items = await enrichProducts(page);
+
+  if (process.env.NODE_ENV === "development") {
+    console.info("[waai:product-search]", {
+      originalQuery: raw,
+      normalizedQuery: q,
+      tokenCount: tokens.length,
+      resultCount: total,
+    });
+  }
+
   return {
     items,
     total,
@@ -319,20 +469,27 @@ function looksLikeUuid(value: string) {
   );
 }
 
+/**
+ * Detail lookup — exact identity only (sku / variant sku / barcode / slug / name).
+ * Partial / fuzzy name search belongs on GET /products/search?q=...
+ */
 export async function getProductBySku(sku: string) {
-  const raw = sku.trim();
+  const raw = clampSearchQuery(sku);
   if (!raw) return null;
-  // Accept chat-style paths: /products/samsung%20g95nc%20özellikleri
-  const cleaned = extractProductSearchQuery(raw) || raw;
-  const identityKeys = Array.from(new Set([raw, cleaned]));
+
+  const identityKeys = Array.from(
+    new Set([raw, normalizeProductQuery(raw)].filter(Boolean)),
+  );
 
   const identityMatchers = identityKeys.flatMap((key) => [
     eq(products.sku, key),
     eq(products.slug, key),
     eq(products.barcode, key),
+    // Case-insensitive exact (no wildcards)
     ilike(products.sku, key),
     ilike(products.slug, key),
     ilike(products.barcode, key),
+    ilike(products.name, key),
   ]);
   for (const key of identityKeys) {
     if (looksLikeUuid(key)) identityMatchers.push(eq(products.id, key));
@@ -347,59 +504,65 @@ export async function getProductBySku(sku: string) {
     .limit(1)
     .then((rows) => rows[0] ?? null);
 
-  if (!row) {
-    const variant = await db.query.productVariants.findFirst({
-      where: and(
-        or(
-          ...identityKeys.flatMap((key) => [
-            eq(productVariants.sku, key),
-            ilike(productVariants.sku, key),
-          ]),
-        ),
-        eq(productVariants.isActive, true),
+  if (row) {
+    const [enriched] = await enrichProducts([row], { detail: true });
+    return enriched ?? null;
+  }
+
+  const variant = await db.query.productVariants.findFirst({
+    where: and(
+      or(
+        ...identityKeys.flatMap((key) => [
+          eq(productVariants.sku, key),
+          ilike(productVariants.sku, key),
+        ]),
       ),
-    });
-    if (variant) {
-      const parent = await db
-        .select(productSelect)
-        .from(products)
-        .leftJoin(categories, eq(products.categoryId, categories.id))
-        .leftJoin(brands, eq(products.brandId, brands.id))
-        .where(
-          and(eq(products.id, variant.productId), eq(products.status, "active")),
-        )
-        .limit(1)
-        .then((rows) => rows[0] ?? null);
-      if (!parent) return null;
-
-      const [enriched] = await enrichProducts([parent], { detail: true });
-      if (!enriched) return null;
-      return {
-        ...enriched,
-        matchedVariantSku: variant.sku,
-        matchedVariantName: variant.name,
-        matchedVariantStock: variant.stock,
-      };
-    }
-
-    // WhatsApp often sends short brand+model instead of full title.
-    const candidates = await db
+      eq(productVariants.isActive, true),
+    ),
+  });
+  if (variant) {
+    const parent = await db
       .select(productSelect)
       .from(products)
       .leftJoin(categories, eq(products.categoryId, categories.id))
       .leftJoin(brands, eq(products.brandId, brands.id))
-      .where(productSearchWhere(cleaned))
-      .orderBy(desc(products.soldCount), desc(products.isFeatured))
-      .limit(12);
+      .where(
+        and(eq(products.id, variant.productId), eq(products.status, "active")),
+      )
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+    if (!parent) return null;
 
-    const best = pickBestProductMatch(cleaned, candidates);
-    if (!best) return null;
-
-    const [enriched] = await enrichProducts([best], { detail: true });
-    return enriched ?? null;
+    const [enriched] = await enrichProducts([parent], { detail: true });
+    if (!enriched) return null;
+    return {
+      ...enriched,
+      matchedVariantSku: variant.sku,
+      matchedVariantName: variant.name,
+      matchedVariantStock: variant.stock,
+    };
   }
 
-  const [enriched] = await enrichProducts([row], { detail: true });
+  // Safe normalized exact name match only (not substring / fuzzy).
+  const normalized = normalizeProductQuery(raw);
+  if (!normalized) return null;
+
+  const exactName = await db
+    .select(productSelect)
+    .from(products)
+    .leftJoin(categories, eq(products.categoryId, categories.id))
+    .leftJoin(brands, eq(products.brandId, brands.id))
+    .where(
+      and(
+        eq(products.status, "active"),
+        foldedEquals(products.name, normalized),
+      ),
+    )
+    .limit(1)
+    .then((rows) => rows[0] ?? null);
+
+  if (!exactName) return null;
+  const [enriched] = await enrichProducts([exactName], { detail: true });
   return enriched ?? null;
 }
 

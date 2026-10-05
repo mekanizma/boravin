@@ -276,14 +276,14 @@ export function parsePagination(url: URL) {
   return { page, limit, offset: (page - 1) * limit };
 }
 
-/** Waai sometimes sends q / query / search / name. */
+/** Waai sometimes sends q / query / search / name. Max 200 chars. */
 export function parseSearchQuery(url: URL) {
-  return (
+  const raw =
     url.searchParams.get("q")?.trim() ||
     url.searchParams.get("query")?.trim() ||
     url.searchParams.get("search")?.trim() ||
     url.searchParams.get("name")?.trim() ||
     url.searchParams.get("sku")?.trim() ||
-    ""
-  );
+    "";
+  return raw.slice(0, 200);
 }

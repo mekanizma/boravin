@@ -17,17 +17,20 @@ export async function GET(request: Request) {
   const { page, limit, offset } = parsePagination(url);
   const q = parseSearchQuery(url);
 
+  const inStockOnly = url.searchParams.get("inStock") === "1";
+
   // Waai sometimes hits /products?q=... instead of /products/search?q=...
+  // Both list?q= and /search share searchProducts (same ranking).
   const result = q
     ? q.toLowerCase() === "test"
-      ? await listProducts({ offset: 0, limit: Math.min(limit, 5) })
-      : await searchProducts({ q, offset, limit })
+      ? await listProducts({ offset: 0, limit: Math.min(limit, 5), inStockOnly })
+      : await searchProducts({ q, offset, limit, inStockOnly })
     : await listProducts({
         offset,
         limit,
         category: url.searchParams.get("category"),
         brand: url.searchParams.get("brand"),
-        inStockOnly: url.searchParams.get("inStock") === "1",
+        inStockOnly,
       });
 
   return jsonWaaiProductList(result.items as Array<Record<string, unknown>>, {

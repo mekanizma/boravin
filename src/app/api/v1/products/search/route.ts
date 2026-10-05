@@ -25,12 +25,17 @@ export async function GET(request: Request) {
   }
 
   const { page, limit, offset } = parsePagination(url);
+  const inStockOnly = url.searchParams.get("inStock") === "1";
 
   // Waai bağlantı testi `?q=test` gönderir; mağazada eşleşme olmayabilir.
   const isProbe = q.toLowerCase() === "test";
   let result = isProbe
-    ? await listProducts({ offset: 0, limit: Math.min(limit, 5) })
-    : await searchProducts({ q, offset, limit });
+    ? await listProducts({
+        offset: 0,
+        limit: Math.min(limit, 5),
+        inStockOnly,
+      })
+    : await searchProducts({ q, offset, limit, inStockOnly });
 
   const items = result.items;
   const total = result.total;
