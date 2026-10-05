@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeTrackingInput } from "@/lib/waai-api/shipping";
+import {
+  extractOrderLookupKey,
+  looksLikePhoneQuery,
+  normalizeTrackingInput,
+  phoneLast10,
+} from "@/lib/waai-api/shipping";
 import { toWhatsAppDigits } from "@/lib/messaging/whatsapp";
 
 describe("normalizeTrackingInput", () => {
@@ -9,6 +14,32 @@ describe("normalizeTrackingInput", () => {
 
   it("keeps order numbers usable", () => {
     expect(normalizeTrackingInput("wa1234567890")).toBe("WA1234567890");
+  });
+});
+
+describe("extractOrderLookupKey", () => {
+  it("pulls WA/BV codes from chatty text", () => {
+    expect(extractOrderLookupKey("sipariş no: wa0968498494")).toBe(
+      "WA0968498494",
+    );
+    expect(extractOrderLookupKey("#BV0769112478 lütfen")).toBe("BV0769112478");
+  });
+});
+
+describe("looksLikePhoneQuery", () => {
+  it("detects phones and rejects order numbers", () => {
+    expect(looksLikePhoneQuery("05338507761")).toBe(true);
+    expect(looksLikePhoneQuery("+90 533 850 77 61")).toBe(true);
+    expect(looksLikePhoneQuery("WA0968498494")).toBe(false);
+    expect(looksLikePhoneQuery("wa0968498494")).toBe(false);
+  });
+});
+
+describe("phoneLast10", () => {
+  it("normalizes to national last 10", () => {
+    expect(phoneLast10("05338507761")).toBe("5338507761");
+    expect(phoneLast10("+90 533 850 77 61")).toBe("5338507761");
+    expect(phoneLast10("905338507761")).toBe("5338507761");
   });
 });
 

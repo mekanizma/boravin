@@ -1,7 +1,7 @@
 import { ZodError } from "zod";
 import { requireWaaiAuth } from "@/lib/waai-api/auth";
-import { jsonError, jsonOk } from "@/lib/waai-api/http";
-import { createWaaiOrder } from "@/lib/waai-api/orders";
+import { jsonError, jsonWaaiOrder } from "@/lib/waai-api/http";
+import { createWaaiOrder, getOrderByNumber } from "@/lib/waai-api/orders";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +11,40 @@ function zodMessage(error: ZodError) {
   if (!first) return "Sipariş verisi geçersiz.";
   const path = first.path.length ? first.path.join(".") : "body";
   return `${path}: ${first.message}`;
+}
+
+/** WhatsApp status query via ?q= / ?phone= / ?orderNumber= */
+export async function GET(request: Request) {
+  const auth = requireWaaiAuth(request);
+  if (!auth.ok) return auth.response;
+
+  const url = new URL(request.url);
+  const q =
+    url.searchParams.get("orderNumber")?.trim() ||
+    url.searchParams.get("phone")?.trim() ||
+    url.searchParams.get("q")?.trim() ||
+    url.searchParams.get("query")?.trim() ||
+    url.searchParams.get("search")?.trim() ||
+    "";
+
+  if (!q) {
+    return jsonError(
+      "MISSING_QUERY",
+      "Sipariş no veya telefon gerekli (?orderNumber= / ?phone= / ?q=).",
+      400,
+    );
+  }
+
+  const order = await getOrderByNumber(q);
+  if (!order) {
+    return jsonError(
+      "ORDER_NOT_FOUND",
+      "Sipariş bulunamadı. Sipariş numarasını (WA… / BV…) veya siparişteki telefon numarasını deneyin.",
+      404,
+    );
+  }
+
+  return jsonWaaiOrder(order as Record<string, unknown>);
 }
 
 export async function POST(request: Request) {
@@ -68,7 +102,9 @@ export async function POST(request: Request) {
       );
     }
 
-    return jsonOk(result.order, { status: 201 });
+    return jsonWaaiOrder(result.order as Record<string, unknown>, {
+      status: 201,
+    });
   } catch (error) {
     if (error instanceof ZodError) {
       return jsonError("VALIDATION_ERROR", zodMessage(error), 400, {

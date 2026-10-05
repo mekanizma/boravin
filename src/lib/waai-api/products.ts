@@ -14,6 +14,11 @@ import {
   serializeProduct,
   type WaaiProductAttribute,
 } from "@/lib/waai-api/serialize";
+import {
+  pickBestProductMatch,
+  scoreProductMatch,
+  significantTokens,
+} from "@/lib/waai-api/product-match";
 
 type ProductImageRow = {
   url: string;
@@ -239,6 +244,33 @@ export async function listProducts(opts: {
   };
 }
 
+function productSearchWhere(q: string) {
+  const pattern = `%${q}%`;
+  const tokens = significantTokens(q);
+  return and(
+    eq(products.status, "active"),
+    or(
+      ilike(products.name, pattern),
+      ilike(products.sku, pattern),
+      ilike(products.slug, pattern),
+      ilike(products.barcode, pattern),
+      ilike(products.shortDescription, pattern),
+      ilike(products.seoTitle, pattern),
+      ilike(brands.name, pattern),
+      ilike(categories.name, pattern),
+      sql`exists (
+        select 1 from product_variants v
+        where v.product_id = ${products.id}
+          and v.is_active = true
+          and v.sku ilike ${pattern}
+      )`,
+      ...(tokens.length > 0
+        ? tokens.map((token) => ilike(products.name, `%${token}%`))
+        : []),
+    ),
+  );
+}
+
 export async function searchProducts(opts: {
   q: string;
   offset: number;
@@ -249,42 +281,29 @@ export async function searchProducts(opts: {
     return { items: [] as ReturnType<typeof serializeProduct>[], total: 0 };
   }
 
-  const pattern = `%${q}%`;
-  const where = and(
-    eq(products.status, "active"),
-    or(
-      ilike(products.name, pattern),
-      ilike(products.sku, pattern),
-      ilike(products.barcode, pattern),
-      ilike(products.shortDescription, pattern),
-      ilike(products.seoTitle, pattern),
-      ilike(brands.name, pattern),
-      ilike(categories.name, pattern),
-    ),
+  const where = productSearchWhere(q);
+  // Fetch a ranked candidate window — Waai catalogs are small; relevance > SQL offset.
+  const candidateLimit = Math.min(120, Math.max(opts.limit + opts.offset, 40));
+
+  const rows = await db
+    .select(productSelect)
+    .from(products)
+    .leftJoin(categories, eq(products.categoryId, categories.id))
+    .leftJoin(brands, eq(products.brandId, brands.id))
+    .where(where)
+    .orderBy(desc(products.isFeatured), desc(products.soldCount))
+    .limit(candidateLimit);
+
+  // Sort by relevance but keep all SQL hits (variant SKU / slug matches included).
+  const ranked = [...rows].sort(
+    (a, b) => scoreProductMatch(q, b) - scoreProductMatch(q, a),
   );
-
-  const [rows, countRows] = await Promise.all([
-    db
-      .select(productSelect)
-      .from(products)
-      .leftJoin(categories, eq(products.categoryId, categories.id))
-      .leftJoin(brands, eq(products.brandId, brands.id))
-      .where(where)
-      .orderBy(desc(products.isFeatured), desc(products.soldCount))
-      .limit(opts.limit)
-      .offset(opts.offset),
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(products)
-      .leftJoin(categories, eq(products.categoryId, categories.id))
-      .leftJoin(brands, eq(products.brandId, brands.id))
-      .where(where),
-  ]);
-
-  const items = await enrichProducts(rows);
+  const total = ranked.length;
+  const page = ranked.slice(opts.offset, opts.offset + opts.limit);
+  const items = await enrichProducts(page);
   return {
     items,
-    total: countRows[0]?.count ?? rows.length,
+    total,
     query: q,
   };
 }
@@ -303,6 +322,9 @@ export async function getProductBySku(sku: string) {
     eq(products.sku, normalized),
     eq(products.slug, normalized),
     eq(products.barcode, normalized),
+    ilike(products.sku, normalized),
+    ilike(products.slug, normalized),
+    ilike(products.barcode, normalized),
   ];
   if (looksLikeUuid(normalized)) {
     identityMatchers.push(eq(products.id, normalized));
@@ -320,7 +342,10 @@ export async function getProductBySku(sku: string) {
   if (!row) {
     const variant = await db.query.productVariants.findFirst({
       where: and(
-        eq(productVariants.sku, normalized),
+        or(
+          eq(productVariants.sku, normalized),
+          ilike(productVariants.sku, normalized),
+        ),
         eq(productVariants.isActive, true),
       ),
     });
@@ -338,14 +363,30 @@ export async function getProductBySku(sku: string) {
       if (!parent) return null;
 
       const [enriched] = await enrichProducts([parent], { detail: true });
-      return enriched ?? null;
+      if (!enriched) return null;
+      return {
+        ...enriched,
+        matchedVariantSku: variant.sku,
+        matchedVariantName: variant.name,
+        matchedVariantStock: variant.stock,
+      };
     }
 
-    // WhatsApp often sends product title instead of SKU.
-    const byName = await searchProducts({ q: normalized, offset: 0, limit: 5 });
-    const hit = byName.items[0];
-    if (!hit?.sku) return null;
-    return getProductBySku(hit.sku);
+    // WhatsApp often sends product title instead of SKU — rank, don't take SQL order.
+    const candidates = await db
+      .select(productSelect)
+      .from(products)
+      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .leftJoin(brands, eq(products.brandId, brands.id))
+      .where(productSearchWhere(normalized))
+      .orderBy(desc(products.soldCount), desc(products.isFeatured))
+      .limit(12);
+
+    const best = pickBestProductMatch(normalized, candidates);
+    if (!best) return null;
+
+    const [enriched] = await enrichProducts([best], { detail: true });
+    return enriched ?? null;
   }
 
   const [enriched] = await enrichProducts([row], { detail: true });
@@ -367,7 +408,12 @@ export async function getRecommendations(opts: {
 
   if (opts.sku || opts.productId) {
     const key = (opts.sku ?? opts.productId)!.trim();
-    const matchers = [eq(products.sku, key), eq(products.slug, key)];
+    const matchers = [
+      eq(products.sku, key),
+      eq(products.slug, key),
+      ilike(products.sku, key),
+      ilike(products.slug, key),
+    ];
     if (looksLikeUuid(key)) matchers.push(eq(products.id, key));
 
     seed = await db
@@ -381,6 +427,24 @@ export async function getRecommendations(opts: {
       .where(and(eq(products.status, "active"), or(...matchers)))
       .limit(1)
       .then((rows) => rows[0] ?? null);
+
+    // Name / fuzzy fallback for WhatsApp ("iPhone 16 Pro" etc.)
+    if (!seed) {
+      const resolved = await getProductBySku(key);
+      if (resolved?.id) {
+        seed = await db
+          .select({
+            id: products.id,
+            categoryId: products.categoryId,
+            brandId: products.brandId,
+            price: products.price,
+          })
+          .from(products)
+          .where(eq(products.id, resolved.id))
+          .limit(1)
+          .then((rows) => rows[0] ?? null);
+      }
+    }
   }
 
   const conditions = [eq(products.status, "active"), gt(products.stock, 0)];

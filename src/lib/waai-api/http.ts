@@ -16,6 +16,16 @@ export function jsonWaaiProductList<T extends Record<string, unknown>>(
     pagination?: Record<string, unknown>;
   },
 ) {
+  const query = meta?.query;
+  const message =
+    items.length === 0
+      ? query
+        ? `"${query}" için ürün bulunamadı.`
+        : "Ürün bulunamadı."
+      : query
+        ? `"${query}" için ${items.length} ürün bulundu.`
+        : `${items.length} ürün listelendi.`;
+
   return NextResponse.json(
     {
       ok: true as const,
@@ -24,7 +34,8 @@ export function jsonWaaiProductList<T extends Record<string, unknown>>(
       items,
       data: items,
       count: items.length,
-      ...(meta?.query ? { query: meta.query } : {}),
+      message,
+      ...(query ? { query } : {}),
       ...(meta?.pagination ? { pagination: meta.pagination } : {}),
     },
     { status: meta?.status ?? 200 },
@@ -39,6 +50,35 @@ export function jsonWaaiProduct<T extends Record<string, unknown>>(product: T) {
       : typeof product.quantity === "number"
         ? product.quantity
         : 0;
+  const inStock = Boolean(product.inStock ?? stock > 0);
+  const name =
+    (typeof product.name === "string" && product.name) ||
+    (typeof product.title === "string" && product.title) ||
+    null;
+  const currency =
+    typeof product.currency === "string" ? product.currency : "TRY";
+  const price = typeof product.price === "number" ? product.price : null;
+  const brand =
+    product.brand && typeof product.brand === "object"
+      ? ((product.brand as Record<string, unknown>).name ?? null)
+      : null;
+  const category =
+    product.category && typeof product.category === "object"
+      ? ((product.category as Record<string, unknown>).name ?? null)
+      : null;
+  const shortDescription =
+    typeof product.shortDescription === "string"
+      ? product.shortDescription
+      : null;
+  const message =
+    typeof product.message === "string"
+      ? product.message
+      : name
+        ? inStock
+          ? `${name}${price != null ? ` · ${price} ${currency}` : ""} · Stokta ${stock} adet.`
+          : `${name}${price != null ? ` · ${price} ${currency}` : ""} · Şu an stokta yok.`
+        : "Ürün bulundu.";
+
   return NextResponse.json({
     ok: true as const,
     success: true as const,
@@ -46,16 +86,27 @@ export function jsonWaaiProduct<T extends Record<string, unknown>>(product: T) {
     product,
     products: [product],
     items: [product],
-    name: product.name ?? product.title ?? null,
-    title: product.title ?? product.name ?? null,
+    name,
+    title: product.title ?? name,
     sku: product.sku ?? null,
-    price: product.price ?? null,
+    price,
     stock,
     quantity: stock,
     available: stock,
-    inStock: Boolean(product.inStock ?? stock > 0),
+    inStock,
     currency: product.currency ?? null,
     url: product.url ?? null,
+    imageUrl: product.imageUrl ?? null,
+    shortDescription,
+    brand,
+    category,
+    specs: product.specs ?? undefined,
+    technicalSpecs: product.technicalSpecs ?? undefined,
+    attributes: product.attributes ?? undefined,
+    variants: product.variants ?? undefined,
+    hasVariants: product.hasVariants ?? undefined,
+    matchedVariantSku: product.matchedVariantSku ?? undefined,
+    message,
   });
 }
 
@@ -93,6 +144,96 @@ export function jsonWaaiStock<T extends Record<string, unknown>>(stock: T) {
           ? `${name ?? "Ürün"} stokta: ${qty} adet.`
           : `${name ?? "Ürün"} şu an stokta yok.`,
     variants: stock.variants ?? undefined,
+  });
+}
+
+/** Order status — nested `data` + flat aliases Waai often reads. */
+export function jsonWaaiOrder<T extends Record<string, unknown>>(
+  order: T,
+  init?: { status?: number },
+) {
+  const orderNumber =
+    typeof order.orderNumber === "string" ? order.orderNumber : null;
+  const status = typeof order.status === "string" ? order.status : null;
+  const statusLabel =
+    typeof order.statusLabel === "string" ? order.statusLabel : status;
+  const paymentStatus =
+    typeof order.paymentStatus === "string" ? order.paymentStatus : null;
+  const paymentStatusLabel =
+    typeof order.paymentStatusLabel === "string"
+      ? order.paymentStatusLabel
+      : paymentStatus;
+  const shipping =
+    order.shipping && typeof order.shipping === "object"
+      ? (order.shipping as Record<string, unknown>)
+      : null;
+  const trackingNumber =
+    (shipping && typeof shipping.trackingNumber === "string"
+      ? shipping.trackingNumber
+      : null) ||
+    (typeof order.trackingNumber === "string" ? order.trackingNumber : null);
+  const message =
+    typeof order.message === "string"
+      ? order.message
+      : orderNumber && statusLabel
+        ? `Sipariş ${orderNumber}: ${statusLabel}.`
+        : "Sipariş bulundu.";
+
+  return NextResponse.json(
+    {
+      ok: true as const,
+      success: true as const,
+      data: order,
+      order,
+      orders: [order],
+      items: [order],
+      orderNumber,
+      status,
+      statusLabel,
+      paymentStatus,
+      paymentStatusLabel,
+      trackingNumber,
+      message,
+    },
+    { status: init?.status ?? 200 },
+  );
+}
+
+/** Shipping / order-status lookup — flat fields for Waai prompts. */
+export function jsonWaaiShipping<T extends Record<string, unknown>>(
+  shipping: T,
+) {
+  const orderNumber =
+    typeof shipping.orderNumber === "string" ? shipping.orderNumber : null;
+  const orderStatus =
+    typeof shipping.orderStatus === "string" ? shipping.orderStatus : null;
+  const orderStatusLabel =
+    typeof shipping.orderStatusLabel === "string"
+      ? shipping.orderStatusLabel
+      : orderStatus;
+  const message =
+    typeof shipping.message === "string"
+      ? shipping.message
+      : orderNumber && orderStatusLabel
+        ? `Sipariş ${orderNumber}: ${orderStatusLabel}.`
+        : "Kargo kaydı bulundu.";
+
+  return NextResponse.json({
+    ok: true as const,
+    success: true as const,
+    data: shipping,
+    shipping,
+    orderNumber,
+    status: orderStatus,
+    statusLabel: orderStatusLabel,
+    orderStatus,
+    orderStatusLabel,
+    paymentStatus: shipping.paymentStatus ?? null,
+    paymentStatusLabel: shipping.paymentStatusLabel ?? null,
+    trackingNumber: shipping.trackingNumber ?? null,
+    carrier: shipping.carrier ?? null,
+    shipmentStatus: shipping.shipmentStatus ?? null,
+    message,
   });
 }
 

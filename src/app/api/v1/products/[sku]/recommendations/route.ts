@@ -1,5 +1,5 @@
 import { requireWaaiAuth } from "@/lib/waai-api/auth";
-import { jsonOk } from "@/lib/waai-api/http";
+import { jsonWaaiProductList } from "@/lib/waai-api/http";
 import { getRecommendations } from "@/lib/waai-api/products";
 
 export const runtime = "nodejs";
@@ -20,5 +20,13 @@ export async function GET(request: Request, context: RouteContext) {
     limit,
   });
 
-  return jsonOk(result);
+  return jsonWaaiProductList(result.items as Array<Record<string, unknown>>, {
+    query: result.seedSku ?? decodeURIComponent(sku),
+    pagination: {
+      page: 1,
+      limit,
+      total: result.items.length,
+      totalPages: 1,
+    },
+  });
 }

@@ -1,5 +1,5 @@
 import { requireWaaiAuth } from "@/lib/waai-api/auth";
-import { jsonError, jsonOk } from "@/lib/waai-api/http";
+import { jsonError, jsonWaaiOrder } from "@/lib/waai-api/http";
 import { getOrderByNumber } from "@/lib/waai-api/orders";
 
 export const runtime = "nodejs";
@@ -14,8 +14,12 @@ export async function GET(request: Request, context: RouteContext) {
   const { orderNumber } = await context.params;
   const order = await getOrderByNumber(decodeURIComponent(orderNumber));
   if (!order) {
-    return jsonError("ORDER_NOT_FOUND", "Sipariş bulunamadı.", 404);
+    return jsonError(
+      "ORDER_NOT_FOUND",
+      "Sipariş bulunamadı. Sipariş numarasını (WA… / BV…) veya siparişteki telefon numarasını deneyin.",
+      404,
+    );
   }
 
-  return jsonOk(order);
+  return jsonWaaiOrder(order as Record<string, unknown>);
 }

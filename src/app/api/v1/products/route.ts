@@ -1,6 +1,10 @@
 import { requireWaaiAuth } from "@/lib/waai-api/auth";
-import { jsonWaaiProductList, parsePagination } from "@/lib/waai-api/http";
-import { listProducts } from "@/lib/waai-api/products";
+import {
+  jsonWaaiProductList,
+  parsePagination,
+  parseSearchQuery,
+} from "@/lib/waai-api/http";
+import { listProducts, searchProducts } from "@/lib/waai-api/products";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,15 +15,23 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const { page, limit, offset } = parsePagination(url);
-  const result = await listProducts({
-    offset,
-    limit,
-    category: url.searchParams.get("category"),
-    brand: url.searchParams.get("brand"),
-    inStockOnly: url.searchParams.get("inStock") === "1",
-  });
+  const q = parseSearchQuery(url);
+
+  // Waai sometimes hits /products?q=... instead of /products/search?q=...
+  const result = q
+    ? q.toLowerCase() === "test"
+      ? await listProducts({ offset: 0, limit: Math.min(limit, 5) })
+      : await searchProducts({ q, offset, limit })
+    : await listProducts({
+        offset,
+        limit,
+        category: url.searchParams.get("category"),
+        brand: url.searchParams.get("brand"),
+        inStockOnly: url.searchParams.get("inStock") === "1",
+      });
 
   return jsonWaaiProductList(result.items as Array<Record<string, unknown>>, {
+    ...(q ? { query: q } : {}),
     pagination: {
       page,
       limit,

@@ -17,15 +17,21 @@ export async function GET(request: Request) {
     configured: isWaaiApiConfigured(),
     endpoints: {
       products: "GET /api/v1/products",
-      productDetail: "GET /api/v1/products/{sku}",
-      productSearch: "GET /api/v1/products/search?q={query}",
+      productDetail:
+        "GET /api/v1/products/{sku|name|slug|barcode|variantSku}",
+      productSearch:
+        "GET /api/v1/products/search?q={query} (veya GET /api/v1/products?q=...)",
+      productSearchHint:
+        "Ad, SKU, slug, barkod, marka, kategori ve varyant SKU arar; sonuçlar alakalılık sırasıyla döner.",
       recommendations: "GET /api/v1/products/{sku}/recommendations",
-      stock: "GET /api/v1/stock/{sku}",
+      stock: "GET /api/v1/stock/{sku|name|variantSku}",
       createOrder: "POST /api/v1/orders",
       orderDetail: "GET /api/v1/orders/{orderNumber}",
+      orderLookup:
+        "GET /api/v1/orders?q={orderNumber|phone} veya ?phone=… — durum sorgusu",
       shipping: "GET /api/v1/shipping/{trackingNumber}",
       shippingHint:
-        "Takip no VEYA sipariş no (WA…) kabul eder. Admin panelde kargo takip no girilmezse boş dönebilir.",
+        "Takip no, sipariş no (WA…/BV…) veya telefon kabul eder. Admin panelde kargo takip no girilmezse trackingNumber boş olabilir; orderStatus yine döner.",
       orderStatusNotify:
         "Admin durum değişince WhatsApp bildirimi: WHATSAPP_NOTIFY_WEBHOOK_URL veya Meta WHATSAPP_ACCESS_TOKEN + WHATSAPP_PHONE_NUMBER_ID",
     },

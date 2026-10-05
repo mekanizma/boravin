@@ -13,6 +13,16 @@ import {
 import { applyStockChange, StockError } from "@/lib/stock/apply";
 import { orderStatusLabel } from "@/lib/orders/status";
 import { serializeOrder } from "@/lib/waai-api/serialize";
+import {
+  extractOrderLookupKey,
+  findLatestOrderByPhone,
+  looksLikePhoneQuery,
+  normalizeTrackingInput,
+} from "@/lib/waai-api/shipping";
+import {
+  pickBestProductMatch,
+  significantTokens,
+} from "@/lib/waai-api/product-match";
 
 /** WhatsApp siparişlerinde adres + iletişim her zaman zorunlu. */
 export const createOrderSchema = z.object({
@@ -252,33 +262,6 @@ async function resolveProductByIdentity(normalized: string) {
   });
 }
 
-function normalizeProductQuery(value: string) {
-  return value
-    .toLocaleLowerCase("tr-TR")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9ğüşıöç\s+-]/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function significantTokens(value: string) {
-  const stop = new Set([
-    "ve",
-    "ile",
-    "for",
-    "the",
-    "adet",
-    "urun",
-    "ürün",
-    "model",
-  ]);
-  return normalizeProductQuery(value)
-    .split(" ")
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2 && !stop.has(t));
-}
-
 async function resolveProductByName(normalized: string) {
   const query = normalized.trim();
   if (!query) return null;
@@ -315,7 +298,6 @@ async function resolveProductByName(normalized: string) {
           ilike(products.slug, pattern),
           ilike(products.sku, pattern),
           ilike(products.shortDescription, pattern),
-          // Any significant token — ranking picks the best overlap.
           ...tokenPatterns,
         ),
       ),
@@ -323,37 +305,7 @@ async function resolveProductByName(normalized: string) {
     .orderBy(desc(products.soldCount), desc(products.isFeatured))
     .limit(12);
 
-  if (fuzzy.length === 0) return null;
-  if (fuzzy.length === 1) return fuzzy[0];
-
-  const normalizedQuery = normalizeProductQuery(query);
-  const ranked = fuzzy
-    .map((row) => {
-      const name = normalizeProductQuery(row.name);
-      const tokenHits = tokens.filter((t) => name.includes(t)).length;
-      const exactish = name === normalizedQuery ? 100 : 0;
-      const starts = name.startsWith(normalizedQuery) ? 40 : 0;
-      const contains = name.includes(normalizedQuery) ? 25 : 0;
-      // Prefer products that cover most of the query tokens (ignore color/storage extras).
-      const coverage =
-        tokens.length > 0 ? (tokenHits / tokens.length) * 50 : 0;
-      const lengthPenalty = Math.abs(name.length - normalizedQuery.length);
-      return {
-        row,
-        score:
-          exactish + starts + contains + tokenHits * 20 + coverage - lengthPenalty,
-      };
-    })
-    .sort((a, b) => b.score - a.score);
-
-  const best = ranked[0];
-  // At least 2 token hits or a strong substring match.
-  if (!best) return null;
-  const tokenHits = tokens.filter((t) =>
-    normalizeProductQuery(best.row.name).includes(t),
-  ).length;
-  if (best.score < 20 && tokenHits < 2) return null;
-  return best.row;
+  return pickBestProductMatch(query, fuzzy);
 }
 
 async function suggestProducts(query: string, limit = 5) {
@@ -734,20 +686,39 @@ export async function createWaaiOrder(raw: unknown) {
   }
 }
 
-export async function getOrderByNumber(orderNumber: string) {
-  const normalized = orderNumber.trim();
-  if (!normalized) return null;
-
-  const order = await db.query.orders.findFirst({
-    where: eq(orders.orderNumber, normalized),
-  });
-  if (!order) return null;
-
+async function serializeOrderWithItems(
+  order: typeof orders.$inferSelect,
+) {
   const items = await db.query.orderItems.findMany({
     where: eq(orderItems.orderId, order.id),
   });
-
   return serializeOrder({ ...order, items });
+}
+
+/**
+ * WhatsApp / Waai order lookup:
+ * - WA… / BV… (case / spaces / # prefix tolerant)
+ * - phone number → most recent matching order
+ */
+export async function getOrderByNumber(orderNumber: string) {
+  const raw = orderNumber.trim();
+  if (!raw) return null;
+
+  const lookupKey = extractOrderLookupKey(raw);
+  const normalized = normalizeTrackingInput(lookupKey || raw);
+
+  const order =
+    (await db.query.orders.findFirst({
+      where: or(
+        eq(orders.orderNumber, raw),
+        eq(orders.orderNumber, normalized),
+        sql`upper(${orders.orderNumber}) = ${normalized}`,
+      ),
+    })) ??
+    (looksLikePhoneQuery(raw) ? await findLatestOrderByPhone(raw) : null);
+
+  if (!order) return null;
+  return serializeOrderWithItems(order);
 }
 
 export { orderStatusLabel };

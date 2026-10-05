@@ -1,18 +1,15 @@
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { productVariants, products } from "@/lib/db/schema";
+import {
+  pickBestProductMatch,
+  significantTokens,
+} from "@/lib/waai-api/product-match";
 
-function normalizeQuery(value: string) {
-  return value
-    .toLocaleLowerCase("tr-TR")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9ğüşıöç\s+-]/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+async function findProductByName(query: string) {
+  const normalized = query.trim();
+  if (!normalized) return null;
 
-async function findProductByName(normalized: string) {
   const exact = await db
     .select()
     .from(products)
@@ -27,9 +24,7 @@ async function findProductByName(normalized: string) {
   if (exact[0]) return exact[0];
 
   const pattern = `%${normalized}%`;
-  const tokens = normalizeQuery(normalized)
-    .split(" ")
-    .filter((t) => t.length >= 2);
+  const tokens = significantTokens(normalized);
 
   const fuzzy = await db
     .select()
@@ -41,27 +36,17 @@ async function findProductByName(normalized: string) {
           ilike(products.name, pattern),
           ilike(products.sku, pattern),
           ilike(products.slug, pattern),
-          ...tokens.map((token) => ilike(products.name, `%${token}%`)),
+          ilike(products.shortDescription, pattern),
+          ...(tokens.length > 0
+            ? tokens.map((token) => ilike(products.name, `%${token}%`))
+            : []),
         ),
       ),
     )
     .orderBy(desc(products.soldCount), desc(products.isFeatured))
-    .limit(8);
+    .limit(12);
 
-  if (fuzzy.length === 0) return null;
-  if (fuzzy.length === 1) return fuzzy[0];
-
-  const q = normalizeQuery(normalized);
-  const ranked = fuzzy
-    .map((row) => {
-      const name = normalizeQuery(row.name);
-      const hits = tokens.filter((t) => name.includes(t)).length;
-      const contains = name.includes(q) ? 30 : 0;
-      return { row, score: hits * 20 + contains - Math.abs(name.length - q.length) };
-    })
-    .sort((a, b) => b.score - a.score);
-
-  return ranked[0]?.score && ranked[0].score >= 15 ? ranked[0].row : ranked[0]?.row ?? null;
+  return pickBestProductMatch(normalized, fuzzy);
 }
 
 export async function getStockBySku(sku: string) {
@@ -70,7 +55,10 @@ export async function getStockBySku(sku: string) {
 
   const variant = await db.query.productVariants.findFirst({
     where: and(
-      eq(productVariants.sku, normalized),
+      or(
+        eq(productVariants.sku, normalized),
+        ilike(productVariants.sku, normalized),
+      ),
       eq(productVariants.isActive, true),
     ),
   });
@@ -118,6 +106,7 @@ export async function getStockBySku(sku: string) {
           eq(products.slug, normalized),
           ilike(products.sku, normalized),
           ilike(products.slug, normalized),
+          ilike(products.barcode, normalized),
         ),
       ),
     })) ?? null;
