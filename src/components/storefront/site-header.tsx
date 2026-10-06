@@ -183,7 +183,7 @@ function CategoryPanel({
   const singleBranch = branches.length === 1 ? branches[0] : null;
 
   return (
-    <div className="border-t border-[#e6eaee] bg-white shadow-[0_16px_32px_rgba(18,20,23,0.08)]">
+    <div className="absolute inset-x-0 top-full z-50 border-t border-[#e6eaee] bg-white shadow-[0_16px_32px_rgba(18,20,23,0.08)]">
       <div className="container-bv max-h-[min(70vh,26rem)] overflow-y-auto px-4 py-3 sm:px-0 sm:py-4">
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className="text-[11px] font-semibold tracking-[0.16em] text-[#8b939b] uppercase">
@@ -480,7 +480,7 @@ export function SiteHeader({
 
         <nav
           ref={navRef}
-          className="border-t border-[#e6eaee] bg-[#f4f6f8]"
+          className="relative border-t border-[#e6eaee] bg-[#f4f6f8]"
           onMouseEnter={cancelClose}
           onMouseLeave={() => {
             if (canHover()) scheduleClose();
@@ -582,6 +582,15 @@ export function SiteHeader({
           )}
         </nav>
       </header>
+
+      {openNav ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-black/25 lg:bg-transparent"
+          aria-label={t("closeMenu")}
+          onClick={() => setOpenNav(null)}
+        />
+      ) : null}
 
       {menuOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
