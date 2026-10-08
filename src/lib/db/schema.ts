@@ -163,6 +163,10 @@ export const customers = pgTable(
     taxOffice: varchar("tax_office", { length: 120 }),
     taxNumber: varchar("tax_number", { length: 32 }),
     segment: varchar("segment", { length: 64 }).default("new"),
+    /** Storefront cart: personal percentage discount (0–100). */
+    discountPercent: numeric("discount_percent", { precision: 5, scale: 2 })
+      .default("0")
+      .notNull(),
     totalSpent: numeric("total_spent", { precision: 12, scale: 2 })
       .default("0")
       .notNull(),

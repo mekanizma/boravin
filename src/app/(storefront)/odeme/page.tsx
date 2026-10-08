@@ -30,6 +30,9 @@ type CheckoutItem = {
 type CheckoutTotals = {
   subtotal: number;
   discount: number;
+  customerDiscount: number;
+  customerDiscountPercent: number;
+  couponDiscount: number;
   shipping: number;
   grandTotal: number;
 };
@@ -122,6 +125,9 @@ export default function CheckoutPage() {
   const [totals, setTotals] = React.useState<CheckoutTotals>({
     subtotal: 0,
     discount: 0,
+    customerDiscount: 0,
+    customerDiscountPercent: 0,
+    couponDiscount: 0,
     shipping: 0,
     grandTotal: 0,
   });
@@ -149,6 +155,11 @@ export default function CheckoutPage() {
         setTotals({
           subtotal: Number(bundle.totals.subtotal),
           discount: Number(bundle.totals.discount),
+          customerDiscount: Number(bundle.totals.customerDiscount ?? 0),
+          customerDiscountPercent: Number(
+            bundle.totals.customerDiscountPercent ?? 0,
+          ),
+          couponDiscount: Number(bundle.totals.couponDiscount ?? 0),
           shipping: Number(bundle.totals.shipping),
           grandTotal: Number(bundle.totals.grandTotal),
         });
@@ -570,7 +581,29 @@ export default function CheckoutPage() {
               <span>{t("subtotal")}</span>
               <span className="tabular-nums">{formatMoney(totals.subtotal)}</span>
             </div>
-            {totals.discount > 0 ? (
+            {totals.customerDiscount > 0 ? (
+              <div className="flex justify-between gap-3 text-[var(--bv-success)]">
+                <span>
+                  {t("customerDiscount", {
+                    percent: String(totals.customerDiscountPercent),
+                  })}
+                </span>
+                <span className="tabular-nums">
+                  −{formatMoney(totals.customerDiscount)}
+                </span>
+              </div>
+            ) : null}
+            {totals.couponDiscount > 0 ? (
+              <div className="flex justify-between gap-3 text-[var(--bv-success)]">
+                <span>{t("couponDiscount")}</span>
+                <span className="tabular-nums">
+                  −{formatMoney(totals.couponDiscount)}
+                </span>
+              </div>
+            ) : null}
+            {totals.customerDiscount <= 0 &&
+            totals.couponDiscount <= 0 &&
+            totals.discount > 0 ? (
               <div className="flex justify-between text-[var(--bv-success)]">
                 <span>{t("discount")}</span>
                 <span className="tabular-nums">−{formatMoney(totals.discount)}</span>

@@ -6,6 +6,8 @@ export type AdminColumn<T extends object = Record<string, unknown>> = {
   header?: string;
   className?: string;
   sortable?: boolean;
+  /** Hide column below md breakpoint (mobile). */
+  hideOnMobile?: boolean;
   cell?: (row: T) => React.ReactNode;
 };
 
@@ -13,29 +15,35 @@ export function AdminTable<T extends object>({
   columns,
   rows,
   emptyMessage = "Kayıt bulunamadı",
+  stickyFirstColumn = true,
 }: {
   columns: AdminColumn<T>[];
   rows: T[];
   emptyMessage?: string;
+  stickyFirstColumn?: boolean;
 }) {
   if (!rows.length) {
     return (
-      <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--bv-border-strong)] p-10 text-center text-sm text-[var(--bv-muted)]">
+      <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--bv-border-strong)] p-6 text-center text-sm text-[var(--bv-muted)] sm:p-10">
         {emptyMessage}
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--bv-border)] bg-white">
+    <div className="overflow-x-auto overscroll-x-contain rounded-[var(--radius-lg)] border border-[var(--bv-border)] bg-white [-webkit-overflow-scrolling:touch]">
       <table className="min-w-full text-left text-sm">
         <thead className="border-b border-[var(--bv-border)] bg-[var(--bv-concrete)]/50">
           <tr>
-            {columns.map((col) => (
+            {columns.map((col, index) => (
               <th
                 key={col.key}
                 className={cn(
-                  "px-3 py-2.5 text-xs font-semibold tracking-wide text-[var(--bv-slate)] uppercase",
+                  "px-3 py-2.5 text-xs font-semibold tracking-wide whitespace-nowrap text-[var(--bv-slate)] uppercase",
+                  col.hideOnMobile && "hidden md:table-cell",
+                  stickyFirstColumn &&
+                    index === 0 &&
+                    "sticky left-0 z-10 bg-[var(--bv-concrete)] shadow-[1px_0_0_var(--bv-border)]",
                   col.className,
                 )}
               >
@@ -51,10 +59,20 @@ export function AdminTable<T extends object>({
             return (
               <tr
                 key={key}
-                className="border-b border-[var(--bv-border)] last:border-0 hover:bg-[var(--bv-concrete)]/30"
+                className="group border-b border-[var(--bv-border)] last:border-0 hover:bg-[var(--bv-concrete)]/30"
               >
-                {columns.map((col) => (
-                  <td key={col.key} className={cn("px-3 py-3", col.className)}>
+                {columns.map((col, index) => (
+                  <td
+                    key={col.key}
+                    className={cn(
+                      "px-3 py-3",
+                      col.hideOnMobile && "hidden md:table-cell",
+                      stickyFirstColumn &&
+                        index === 0 &&
+                        "sticky left-0 z-10 bg-white group-hover:bg-[var(--bv-concrete)]/30 shadow-[1px_0_0_var(--bv-border)]",
+                      col.className,
+                    )}
+                  >
                     {col.cell
                       ? col.cell(row)
                       : ((row as Record<string, React.ReactNode>)[col.key] ??

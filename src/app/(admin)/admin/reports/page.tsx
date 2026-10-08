@@ -14,13 +14,9 @@ import {
 } from "@/lib/reports/ranges";
 import { loadEcommerceReport } from "@/lib/reports/queries";
 
-const SEGMENT_LABELS: Record<string, string> = {
-  new: "Yeni",
-  returning: "Geri dönen",
-  vip: "VIP",
-  inactive: "Pasif",
-  corporate: "Kurumsal",
-};
+import { CUSTOMER_SEGMENT_LABELS } from "@/lib/customers/segment";
+
+const SEGMENT_LABELS = CUSTOMER_SEGMENT_LABELS;
 
 const getCachedReport = (period: ReportPeriod) =>
   unstable_cache(

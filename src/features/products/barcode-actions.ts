@@ -37,7 +37,14 @@ import { slugify } from "@/lib/utils";
 const saveSchema = z.object({
   name: z.string().trim().min(2, "Ürün adı gerekli."),
   sku: z.string().trim().min(2, "SKU gerekli."),
-  barcode: z.string().trim().min(8).max(14),
+  /** Empty = manuel ürün (barkodsuz); doluysa 8–14 hane. */
+  barcode: z
+    .string()
+    .trim()
+    .refine(
+      (v) => v.length === 0 || (v.length >= 8 && v.length <= 14 && /^\d+$/.test(v)),
+      "Barkod 8–14 haneli rakam olmalı veya boş bırakılmalı.",
+    ),
   categoryId: z.string().uuid().nullable(),
   brandId: z.string().uuid().nullable(),
   brandName: z.string().trim().max(160),
@@ -224,7 +231,14 @@ async function resolveBrand(brandId: string | null, brandName: string) {
   return { id: again?.id ?? null, created: false };
 }
 
-async function uniqueSku(base: string, barcode: string) {
+function uniquenessSeed(barcode: string | null | undefined) {
+  const digits = (barcode ?? "").replace(/\D/g, "");
+  if (digits.length >= 4) return digits.slice(-6);
+  return Date.now().toString(36).slice(-6);
+}
+
+async function uniqueSku(base: string, barcode: string | null | undefined) {
+  const seed = uniquenessSeed(barcode);
   let sku = base.slice(0, 64);
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const taken = await getDb().query.products.findFirst({
@@ -232,20 +246,21 @@ async function uniqueSku(base: string, barcode: string) {
       columns: { id: true },
     });
     if (!taken) return sku;
-    const suffix = attempt === 0 ? barcode.slice(-4) : barcode.slice(-4) + String(attempt);
+    const suffix = attempt === 0 ? seed.slice(-4) : seed.slice(-4) + String(attempt);
     sku = `${base.slice(0, 64 - suffix.length - 1)}-${suffix}`;
   }
-  return `${base.slice(0, 50)}-${barcode.slice(-6)}`;
+  return `${base.slice(0, 50)}-${seed}`;
 }
 
-async function uniqueSlug(name: string, barcode: string) {
-  let slug = slugify(name) || `urun-${barcode}`;
+async function uniqueSlug(name: string, barcode: string | null | undefined) {
+  const seed = uniquenessSeed(barcode);
+  let slug = slugify(name) || `urun-${seed}`;
   const taken = await getDb().query.products.findFirst({
     where: eq(products.slug, slug),
     columns: { id: true },
   });
   if (!taken) return slug;
-  slug = `${slug}-${barcode.slice(-6)}`.slice(0, 280);
+  slug = `${slug}-${seed}`.slice(0, 280);
   return slug;
 }
 
@@ -254,9 +269,13 @@ export async function createProductFromBarcodeAction(
 ): Promise<CreateFromBarcodeResult> {
   const session = await requirePermission("PRODUCT_CREATE");
 
-  const barcode = normalizeBarcode(formText(formData, "barcode"));
-  if (!barcode) {
-    return { ok: false, message: "Geçerli bir barkod girin." };
+  const rawBarcode = formText(formData, "barcode");
+  const barcode = rawBarcode ? normalizeBarcode(rawBarcode) : null;
+  if (rawBarcode && !barcode) {
+    return {
+      ok: false,
+      message: "Barkod geçersiz. 8–14 haneli rakam girin veya boş bırakın.",
+    };
   }
 
   const priceText = formText(formData, "price");
@@ -267,7 +286,7 @@ export async function createProductFromBarcodeAction(
   const parsed = saveSchema.safeParse({
     name: formText(formData, "name"),
     sku: formText(formData, "sku"),
-    barcode,
+    barcode: barcode ?? "",
     categoryId: formText(formData, "categoryId") || null,
     brandId: formText(formData, "brandId") || null,
     brandName: formText(formData, "brandName"),
@@ -291,13 +310,15 @@ export async function createProductFromBarcodeAction(
     return { ok: false, message: "Fiyat ve stok sayı olmalı." };
   }
 
-  const existing = await findExisting(barcodeCandidates(barcode));
-  if (existing) {
-    return {
-      ok: false,
-      message: "Bu barkod zaten kayıtlı.",
-      existingId: existing.id,
-    };
+  if (barcode) {
+    const existing = await findExisting(barcodeCandidates(barcode));
+    if (existing) {
+      return {
+        ok: false,
+        message: "Bu barkod zaten kayıtlı.",
+        existingId: existing.id,
+      };
+    }
   }
 
   let specs: Record<string, string> = {};
@@ -350,7 +371,7 @@ export async function createProductFromBarcodeAction(
   }
 
   const brand = await resolveBrand(data.brandId, data.brandName);
-  const sku = await uniqueSku(data.sku, barcode);
+  const sku = await uniqueSku(data.sku || barcode || data.name, barcode);
   const slug = await uniqueSlug(data.name, barcode);
 
   const [created] = await getDb()
@@ -359,7 +380,7 @@ export async function createProductFromBarcodeAction(
       name: data.name,
       slug,
       sku,
-      barcode,
+      barcode: barcode || null,
       categoryId: data.categoryId,
       brandId: brand.id,
       shortDescription: data.shortDescription || null,
@@ -386,7 +407,7 @@ export async function createProductFromBarcodeAction(
       quantity: created.stock,
       stockBefore: 0,
       stockAfter: created.stock,
-      note: "Barkod ile ürün oluşturuldu",
+      note: barcode ? "Barkod ile ürün oluşturuldu" : "Manuel ürün oluşturuldu",
       userId: session.user.id,
     });
   }
@@ -396,7 +417,7 @@ export async function createProductFromBarcodeAction(
     action: "PRODUCT_CREATE",
     entityType: "product",
     entityId: created.id,
-    after: { ...created, source: "barcode" },
+    after: { ...created, source: barcode ? "barcode" : "manual" },
   });
 
   if (imageUrls.length) {

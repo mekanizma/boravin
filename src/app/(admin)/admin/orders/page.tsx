@@ -83,7 +83,7 @@ export default async function AdminOrdersPage({
         </p>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch]">
         {FILTERS.map((item) => {
           const active = filter === item.id;
           const href =
@@ -146,6 +146,7 @@ export default async function AdminOrdersPage({
           {
             key: "date",
             header: "Tarih",
+            hideOnMobile: true,
             cell: (r) =>
               new Date(r.createdAt).toLocaleDateString("tr-TR"),
           },

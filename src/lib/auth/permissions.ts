@@ -54,6 +54,7 @@ export const ROLE_PERMISSION_MAP: Record<RoleCode, PermissionCode[]> = {
     "INVOICE_VIEW",
     "INVOICE_MANAGE",
     "CUSTOMER_VIEW",
+    "CUSTOMER_EDIT",
   ],
   CONTENT_MANAGER: [
     "CONTENT_MANAGE",

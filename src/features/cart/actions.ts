@@ -18,6 +18,7 @@ import {
 import { nanoid } from "nanoid";
 import { applyStockChange } from "@/lib/stock/apply";
 import { publicImageUrl } from "@/lib/media/url";
+import { ensureAccountColumns } from "@/lib/account/columns";
 import { getCurrentCustomer } from "@/lib/account/session";
 
 const CART_COOKIE = "bv_cart";
@@ -350,23 +351,31 @@ function computeTotals(
       }
     | null
     | undefined,
+  customerDiscountPercent = 0,
 ) {
   const subtotal = items.reduce(
     (sum, item) => sum + Number(item.unitPrice) * item.quantity,
     0,
   );
 
-  let discount = 0;
+  const pct = Math.min(100, Math.max(0, Number(customerDiscountPercent) || 0));
+  const customerDiscount =
+    pct > 0 ? Math.round(((subtotal * pct) / 100) * 100) / 100 : 0;
+
+  let couponDiscount = 0;
   if (coupon) {
     if (coupon.type === "percent") {
-      discount = (subtotal * Number(coupon.value)) / 100;
+      couponDiscount = (subtotal * Number(coupon.value)) / 100;
       if (coupon.maxDiscount) {
-        discount = Math.min(discount, Number(coupon.maxDiscount));
+        couponDiscount = Math.min(couponDiscount, Number(coupon.maxDiscount));
       }
     } else {
-      discount = Number(coupon.value);
+      couponDiscount = Number(coupon.value);
     }
+    couponDiscount = Math.round(couponDiscount * 100) / 100;
   }
+
+  const discount = Math.min(subtotal, customerDiscount + couponDiscount);
 
   let shipping = shippingPrice;
   if (freeAbove != null && subtotal - discount >= freeAbove) {
@@ -380,6 +389,9 @@ function computeTotals(
   return {
     subtotal,
     discount,
+    customerDiscount,
+    customerDiscountPercent: pct,
+    couponDiscount,
     shipping,
     tax,
     grandTotal,
@@ -395,6 +407,7 @@ export async function getCartTotals() {
 
 /** Single round-trip for checkout / summary UIs. */
 export async function getCheckoutBundle() {
+  await ensureAccountColumns();
   const [{ cart, items }, customer] = await Promise.all([
     getCart(),
     getCurrentCustomer(),
@@ -403,6 +416,9 @@ export async function getCheckoutBundle() {
   const emptyTotals = {
     subtotal: 0,
     discount: 0,
+    customerDiscount: 0,
+    customerDiscountPercent: 0,
+    couponDiscount: 0,
     shipping: 0,
     tax: 0,
     grandTotal: 0,
@@ -480,12 +496,14 @@ export async function getCheckoutBundle() {
   ]);
 
   const method = methods[0];
+  const customerPct = customer ? Number(customer.discountPercent ?? 0) : 0;
   const totals = computeTotals(
     cart,
     items,
     method ? Number(method.price) : 0,
     method?.freeAbove ? Number(method.freeAbove) : null,
     coupon,
+    customerPct,
   );
 
   return { cart, items, totals, account, defaultAddress };
@@ -508,6 +526,7 @@ const checkoutSchema = z.object({
 
 export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
   const data = checkoutSchema.parse(raw);
+  await ensureAccountColumns();
   const customer = await getCurrentCustomer();
   const { cart, items } = await getCart();
   if (!cart || items.length === 0) throw new Error("EMPTY_CART");
@@ -592,12 +611,14 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
     loadActiveShippingMethods(),
   ]);
   const method = methods[0];
+  const customerPct = customer ? Number(customer.discountPercent ?? 0) : 0;
   const totals = computeTotals(
     cart,
     items,
     method ? Number(method.price) : 0,
     method?.freeAbove ? Number(method.freeAbove) : null,
     coupon,
+    customerPct,
   );
   const { orders, orderItems, orderStatusHistory } = await import(
     "@/lib/db/schema"

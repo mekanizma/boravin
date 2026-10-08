@@ -17,12 +17,15 @@ export default async function CartPage() {
   const tCommon = await getTranslations("Common");
   const locale = await getLocale();
   const { items, totals } = await getCheckoutBundle();
-  const [subtotal, discount, shipping, grandTotal] = await Promise.all([
-    formatMoneyServer(totals.subtotal),
-    formatMoneyServer(totals.discount),
-    formatMoneyServer(totals.shipping),
-    formatMoneyServer(totals.grandTotal),
-  ]);
+  const [subtotal, customerDiscountLabel, couponDiscountLabel, discount, shipping, grandTotal] =
+    await Promise.all([
+      formatMoneyServer(totals.subtotal),
+      formatMoneyServer(totals.customerDiscount ?? 0),
+      formatMoneyServer(totals.couponDiscount ?? 0),
+      formatMoneyServer(totals.discount),
+      formatMoneyServer(totals.shipping),
+      formatMoneyServer(totals.grandTotal),
+    ]);
 
   if (!items.length) {
     return (
@@ -81,21 +84,41 @@ export default async function CartPage() {
           <h2 className="font-semibold">{t("summary")}</h2>
           <CartCouponForm couponCode={totals.couponCode} />
           <dl className="mt-4 space-y-2 text-sm">
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <dt>{t("subtotal")}</dt>
-              <dd>{subtotal}</dd>
+              <dd className="tabular-nums">{subtotal}</dd>
             </div>
-            <div className="flex justify-between">
-              <dt>{t("discount")}</dt>
-              <dd>-{discount}</dd>
-            </div>
-            <div className="flex justify-between">
+            {(totals.customerDiscount ?? 0) > 0 ? (
+              <div className="flex justify-between gap-3 text-[var(--bv-success)]">
+                <dt>
+                  {t("customerDiscount", {
+                    percent: String(totals.customerDiscountPercent ?? 0),
+                  })}
+                </dt>
+                <dd className="tabular-nums">-{customerDiscountLabel}</dd>
+              </div>
+            ) : null}
+            {(totals.couponDiscount ?? 0) > 0 ? (
+              <div className="flex justify-between gap-3 text-[var(--bv-success)]">
+                <dt>{t("couponDiscount")}</dt>
+                <dd className="tabular-nums">-{couponDiscountLabel}</dd>
+              </div>
+            ) : null}
+            {(totals.customerDiscount ?? 0) <= 0 &&
+            (totals.couponDiscount ?? 0) <= 0 &&
+            totals.discount > 0 ? (
+              <div className="flex justify-between gap-3">
+                <dt>{t("discount")}</dt>
+                <dd className="tabular-nums">-{discount}</dd>
+              </div>
+            ) : null}
+            <div className="flex justify-between gap-3">
               <dt>{t("shipping")}</dt>
-              <dd>{shipping}</dd>
+              <dd className="tabular-nums">{shipping}</dd>
             </div>
-            <div className="flex justify-between border-t border-[var(--bv-border)] pt-2 text-base font-semibold">
+            <div className="flex justify-between gap-3 border-t border-[var(--bv-border)] pt-2 text-base font-semibold">
               <dt>{t("total")}</dt>
-              <dd>{grandTotal}</dd>
+              <dd className="tabular-nums">{grandTotal}</dd>
             </div>
           </dl>
           <Link href="/odeme" className="mt-4 block">

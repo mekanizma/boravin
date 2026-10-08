@@ -728,19 +728,21 @@ export function ProductOutboundForm() {
         </div>
       </section>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--bv-border)] bg-white p-3 lg:static lg:border-0 lg:bg-transparent lg:p-0">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--bv-border)] bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm lg:static lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
         <Button
           type="submit"
           size="lg"
-          className="w-full"
+          className="w-full max-w-full truncate"
           disabled={saving || lines.length === 0}
         >
-          <Plus className="h-4 w-4" />
-          {saving
-            ? "Kaydediliyor…"
-            : markPaid
-              ? `Çıkış yap · Ödendi · ${formatCurrency(totals.grandTotal)}`
-              : `Çıkış yap · ${formatCurrency(totals.grandTotal)}`}
+          <Plus className="h-4 w-4 shrink-0" />
+          <span className="truncate">
+            {saving
+              ? "Kaydediliyor…"
+              : markPaid
+                ? `Çıkış · Ödendi · ${formatCurrency(totals.grandTotal)}`
+                : `Çıkış · ${formatCurrency(totals.grandTotal)}`}
+          </span>
         </Button>
       </div>
     </form>

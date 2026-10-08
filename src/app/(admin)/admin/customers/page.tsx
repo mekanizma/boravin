@@ -2,8 +2,11 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
+import { ensureAccountColumns } from "@/lib/account/columns";
 import { syncCustomersFromAuth } from "@/lib/account/sync-customers";
 import { AdminTable } from "@/components/admin/admin-table";
+import { CustomerDiscountInput } from "@/components/admin/customer-discount-input";
+import { CustomerSegmentCell } from "@/components/admin/customer-segment-cell";
 import { formatCurrency } from "@/lib/utils";
 
 /** Avoid full Auth listUsers sync on every tab visit. */
@@ -21,6 +24,7 @@ const syncCustomersCached = unstable_cache(
 );
 
 async function loadRows() {
+  await ensureAccountColumns();
   await syncCustomersCached();
 
   return db
@@ -31,6 +35,7 @@ async function loadRows() {
       lastName: customers.lastName,
       orderCount: customers.orderCount,
       totalSpent: customers.totalSpent,
+      discountPercent: customers.discountPercent,
       segment: customers.segment,
       accountType: customers.accountType,
       companyTitle: customers.companyTitle,
@@ -49,7 +54,8 @@ export default async function AdminCustomersPage() {
       <div>
         <h1 className="font-display text-2xl font-semibold">Müşteriler</h1>
         <p className="text-sm text-[var(--bv-muted)]">
-          Supabase Auth + müşteri kayıtları ({rows.length})
+          Supabase Auth + müşteri kayıtları ({rows.length}). Özel % indirim
+          giriş yaptığında sepete otomatik uygulanır.
         </p>
       </div>
       <AdminTable
@@ -59,33 +65,78 @@ export default async function AdminCustomersPage() {
             key: "name",
             header: "Ad",
             sortable: true,
-            cell: (r) =>
-              [r.firstName, r.lastName].filter(Boolean).join(" ") || "—",
+            className: "min-w-[7rem] max-w-[10rem]",
+            cell: (r) => (
+              <div className="min-w-0">
+                <p className="truncate font-medium">
+                  {[r.firstName, r.lastName].filter(Boolean).join(" ") || "—"}
+                </p>
+                <p className="truncate text-[11px] text-[var(--bv-muted)] md:hidden">
+                  {r.email}
+                </p>
+              </div>
+            ),
           },
-          { key: "email", header: "E-posta", cell: (r) => r.email },
+          {
+            key: "discount",
+            header: "Özel indirim",
+            className: "min-w-[9.5rem]",
+            cell: (r) => (
+              <CustomerDiscountInput
+                customerId={r.id}
+                value={r.discountPercent}
+              />
+            ),
+          },
+          {
+            key: "segment",
+            header: "Durum",
+            className: "min-w-[8.5rem]",
+            cell: (r) => (
+              <CustomerSegmentCell
+                segment={r.segment}
+                orderCount={r.orderCount}
+                totalSpent={r.totalSpent}
+              />
+            ),
+          },
+          {
+            key: "email",
+            header: "E-posta",
+            hideOnMobile: true,
+            cell: (r) => r.email,
+          },
           {
             key: "phone",
             header: "Telefon",
+            hideOnMobile: true,
             cell: (r) => r.phone ?? "—",
           },
           {
             key: "type",
             header: "Tür",
+            hideOnMobile: true,
             cell: (r) =>
               r.accountType === "corporate" ? "Kurumsal" : "Bireysel",
           },
           {
             key: "company",
             header: "Ünvan",
+            hideOnMobile: true,
             cell: (r) => r.companyTitle ?? "—",
           },
-          { key: "orders", header: "Sipariş", cell: (r) => r.orderCount },
+          {
+            key: "orders",
+            header: "Sipariş",
+            hideOnMobile: true,
+            cell: (r) => r.orderCount,
+          },
           {
             key: "spent",
             header: "Harcama",
+            hideOnMobile: true,
             cell: (r) => formatCurrency(r.totalSpent),
           },
-          { key: "segment", header: "Segment", cell: (r) => r.segment ?? "—" },
         ]}
       />
     </div>
