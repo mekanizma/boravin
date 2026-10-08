@@ -51,16 +51,25 @@ export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
   const t = useTranslations("Home");
   const [index, setIndex] = React.useState(0);
   const [paused, setPaused] = React.useState(false);
+  const [mounted, setMounted] = React.useState(false);
   const [broken, setBroken] = React.useState<Record<string, true>>({});
   const pointerStart = React.useRef<{ x: number; y: number } | null>(null);
   const swiped = React.useRef(false);
 
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const resolved = React.useMemo(() => {
-    const fromCms = (slides ?? []).filter((slide) => {
-      if (!slide.imageUrl) return false;
-      const key = slide.id ?? slide.imageUrl;
-      return !broken[key];
-    });
+    // Keep SSR + first client paint identical: ignore broken-image filtering until mounted.
+    const source = slides ?? [];
+    const fromCms = mounted
+      ? source.filter((slide) => {
+          if (!slide.imageUrl) return false;
+          const key = slide.id ?? slide.imageUrl;
+          return !broken[key];
+        })
+      : source.filter((slide) => Boolean(slide.imageUrl));
     if (fromCms.length) return fromCms;
 
     return FALLBACK_SLIDES.map((slide, i) => ({
@@ -70,20 +79,20 @@ export function HeroSlider({ slides }: { slides?: HeroSliderSlide[] }) {
       body: t(`slide${i}Body` as "slide0Body"),
       buttonLabel: t("heroCta"),
     }));
-  }, [slides, t, broken]);
+  }, [slides, t, broken, mounted]);
 
   React.useEffect(() => {
     setIndex(0);
   }, [resolved.length]);
 
   React.useEffect(() => {
-    if (paused || resolved.length <= 1) return;
+    if (!mounted || paused || resolved.length <= 1) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const id = window.setInterval(() => {
       setIndex((current) => (current + 1) % resolved.length);
     }, 5500);
     return () => window.clearInterval(id);
-  }, [paused, resolved.length]);
+  }, [mounted, paused, resolved.length]);
 
   const meta = resolved[index] ?? resolved[0];
   if (!meta) return null;

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -31,9 +30,9 @@ import {
   LogOut,
   X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand-logo";
+import { AdminNavLink } from "@/components/admin/admin-nav-link";
 import { logoutAdmin } from "@/features/auth/actions";
 
 const nav = [
@@ -104,19 +103,14 @@ export function AdminSidebar({
             const Icon = item.icon;
             return (
               <li key={item.href}>
-                <Link
+                <AdminNavLink
                   href={item.href}
-                  onClick={onClose}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-[var(--bv-ink)] text-white"
-                      : "text-[var(--bv-slate)] hover:bg-[var(--bv-concrete)] hover:text-[var(--bv-ink)]",
-                  )}
+                  active={active}
+                  onNavigate={onClose}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
                   {item.label}
-                </Link>
+                </AdminNavLink>
               </li>
             );
           })}

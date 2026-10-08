@@ -9,6 +9,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = React.useState(false);
 
+  React.useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
   if (pathname === "/admin/login") {
     return <>{children}</>;
   }

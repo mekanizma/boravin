@@ -56,10 +56,12 @@ export function BrandLogo({
         width={width}
         height={displayHeight}
         priority={priority}
+        loading={priority ? "eager" : undefined}
         className={cn(
           "max-h-full w-auto max-w-[min(42vw,11.5rem)] object-contain object-left sm:max-w-[13rem]",
           useTextTagline ? "h-auto" : s.className,
         )}
+        style={{ width: "auto", height: "auto" }}
       />
     </span>
   );

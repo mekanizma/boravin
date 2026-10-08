@@ -53,10 +53,19 @@ export default async function CartPage() {
               key={item.id}
               className="flex flex-col gap-3 border-b border-[var(--bv-border)] pb-4 sm:flex-row sm:items-center sm:justify-between"
             >
-              <div>
-                <p className="font-medium">
-                  {item.product?.name ?? tCommon("productFallback")}
-                </p>
+              <div className="min-w-0">
+                {item.product?.slug ? (
+                  <Link
+                    href={`/urun/${item.product.slug}`}
+                    className="font-medium hover:underline"
+                  >
+                    {item.product.name}
+                  </Link>
+                ) : (
+                  <p className="font-medium">
+                    {item.product?.name ?? tCommon("productFallback")}
+                  </p>
+                )}
                 {item.variant ? (
                   <p className="text-xs text-[var(--bv-muted)]">
                     {translateVariantLabel(item.variant.name, locale)}

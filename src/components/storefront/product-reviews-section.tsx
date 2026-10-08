@@ -3,6 +3,7 @@ import { Star } from "lucide-react";
 import { DetailCard } from "@/components/storefront/detail-card";
 import { ProductReviewForm } from "@/components/storefront/product-review-form";
 import { listApprovedProductReviews } from "@/features/reviews/actions";
+import { getCurrentCustomer } from "@/lib/account/session";
 import { cn } from "@/lib/utils";
 import { formatDateLocale } from "@/lib/i18n/format";
 import type { AppLocale } from "@/i18n/config";
@@ -35,8 +36,20 @@ export async function ProductReviewsSection({
   const t = await getTranslations("Reviews");
   const locale = (await getLocale()) as AppLocale;
   let items: Awaited<ReturnType<typeof listApprovedProductReviews>> = [];
+  let resolvedName = defaultName ?? "";
   try {
-    items = await listApprovedProductReviews(productId);
+    const [reviews, customer] = await Promise.all([
+      listApprovedProductReviews(productId),
+      resolvedName
+        ? Promise.resolve(null)
+        : getCurrentCustomer().catch(() => null),
+    ]);
+    items = reviews;
+    if (!resolvedName && customer) {
+      resolvedName = [customer.firstName, customer.lastName]
+        .filter(Boolean)
+        .join(" ");
+    }
   } catch {
     items = [];
   }
@@ -97,7 +110,7 @@ export async function ProductReviewsSection({
           <div className="mt-3">
             <ProductReviewForm
               productId={productId}
-              defaultName={defaultName}
+              defaultName={resolvedName || undefined}
             />
           </div>
         </DetailCard>

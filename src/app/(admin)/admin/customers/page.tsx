@@ -1,16 +1,27 @@
 ﻿import { desc } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { syncCustomersFromAuth } from "@/lib/account/sync-customers";
 import { AdminTable } from "@/components/admin/admin-table";
 import { formatCurrency } from "@/lib/utils";
 
+/** Avoid full Auth listUsers sync on every tab visit. */
+const syncCustomersCached = unstable_cache(
+  async () => {
+    try {
+      await syncCustomersFromAuth();
+    } catch (error) {
+      console.error("[admin/customers] auth sync failed", error);
+    }
+    return true;
+  },
+  ["admin-customers-auth-sync-v1"],
+  { revalidate: 300, tags: ["admin-customers"] },
+);
+
 async function loadRows() {
-  try {
-    await syncCustomersFromAuth();
-  } catch (error) {
-    console.error("[admin/customers] auth sync failed", error);
-  }
+  await syncCustomersCached();
 
   return db
     .select({

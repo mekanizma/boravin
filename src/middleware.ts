@@ -12,14 +12,16 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  const kind = user?.app_metadata?.kind;
+
   if (isLogin) {
-    if (user?.app_metadata?.kind === "admin") {
+    if (kind === "admin") {
       return NextResponse.redirect(new URL("/admin", request.nextUrl.origin));
     }
     return response;
   }
 
-  if (!user || user.app_metadata?.kind !== "admin") {
+  if (!user || kind !== "admin") {
     const url = new URL("/admin/login", request.nextUrl.origin);
     url.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(url);

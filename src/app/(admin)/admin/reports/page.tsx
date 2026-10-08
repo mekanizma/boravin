@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import {
   ReportBarChart,
   ReportDualAreaChart,
@@ -9,6 +10,7 @@ import { formatCurrency } from "@/lib/utils";
 import {
   REPORT_PERIODS,
   parseReportPeriod,
+  type ReportPeriod,
 } from "@/lib/reports/ranges";
 import { loadEcommerceReport } from "@/lib/reports/queries";
 
@@ -20,6 +22,13 @@ const SEGMENT_LABELS: Record<string, string> = {
   corporate: "Kurumsal",
 };
 
+const getCachedReport = (period: ReportPeriod) =>
+  unstable_cache(
+    () => loadEcommerceReport(period),
+    ["admin-reports-v1", period],
+    { revalidate: 60, tags: ["admin-reports", "orders", "products"] },
+  )();
+
 export default async function AdminReportsPage({
   searchParams,
 }: {
@@ -27,7 +36,7 @@ export default async function AdminReportsPage({
 }) {
   const params = await searchParams;
   const period = parseReportPeriod(params.period);
-  const report = await loadEcommerceReport(period);
+  const report = await getCachedReport(period);
 
   const rangeLabel = `${new Date(report.range.start).toLocaleDateString("tr-TR")} – ${new Date(report.range.end).toLocaleDateString("tr-TR")}`;
 

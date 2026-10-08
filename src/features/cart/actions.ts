@@ -2,7 +2,7 @@
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
@@ -21,6 +21,15 @@ import { publicImageUrl } from "@/lib/media/url";
 import { getCurrentCustomer } from "@/lib/account/session";
 
 const CART_COOKIE = "bv_cart";
+
+const loadActiveShippingMethods = unstable_cache(
+  async () =>
+    db.query.shippingMethods.findMany({
+      where: eq(shippingMethods.isActive, true),
+    }),
+  ["shipping-methods-active-v1"],
+  { revalidate: 300, tags: ["shipping-methods"] },
+);
 
 async function getOrCreateCartId() {
   const jar = await cookies();
@@ -467,9 +476,7 @@ export async function getCheckoutBundle() {
     cart.couponCode
       ? db.query.coupons.findFirst({ where: eq(coupons.code, cart.couponCode) })
       : Promise.resolve(null),
-    db.query.shippingMethods.findMany({
-      where: eq(shippingMethods.isActive, true),
-    }),
+    loadActiveShippingMethods(),
   ]);
 
   const method = methods[0];
@@ -582,9 +589,7 @@ export async function placeOrder(raw: z.infer<typeof checkoutSchema>) {
     cart.couponCode
       ? db.query.coupons.findFirst({ where: eq(coupons.code, cart.couponCode) })
       : Promise.resolve(null),
-    db.query.shippingMethods.findMany({
-      where: eq(shippingMethods.isActive, true),
-    }),
+    loadActiveShippingMethods(),
   ]);
   const method = methods[0];
   const totals = computeTotals(

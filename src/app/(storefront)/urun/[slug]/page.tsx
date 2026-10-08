@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache, Suspense } from "react";
 import { eq } from "drizzle-orm";
-import { db, getDb, isTransientDbError, recoverDb } from "@/lib/db";
+import { getDb, isTransientDbError, recoverDb } from "@/lib/db";
 import { brands, categories, productImages, productVariants, products } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
 import { ProductGallery } from "@/components/storefront/product-gallery";
 import { ProductBuyPanel } from "@/components/storefront/product-buy-panel";
 import { DetailCard } from "@/components/storefront/detail-card";
 import { ProductReviewsSection } from "@/components/storefront/product-reviews-section";
-import { loadProductCards } from "@/lib/storefront/products";
+import { loadCachedProductCards } from "@/lib/storefront/products";
 import { ProductGrid } from "@/components/storefront/product-grid";
 import { findMockProduct } from "@/lib/mock/storefront";
 import type { Metadata } from "next";
@@ -16,34 +17,14 @@ import { getTranslations } from "next-intl/server";
 import { formatMoneyServer } from "@/lib/i18n/format";
 import { translateCategoryName } from "@/lib/storefront/use-category-label";
 import { publicImageUrl } from "@/lib/media/url";
-import { getCurrentCustomer } from "@/lib/account/session";
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
-  const { slug } = await params;
-  const mock = findMockProduct(slug);
-  try {
-    const product = await db.query.products.findFirst({
-      where: eq(products.slug, slug),
-    });
-    if (product) {
-      return {
-        title: product.seoTitle ?? product.name,
-        description: product.seoDescription ?? product.shortDescription ?? undefined,
-      };
-    }
-  } catch {
-    // Fall through to the mock catalog.
-  }
-  if (mock) return { title: mock.name, description: mock.brandName ?? undefined };
-  const t = await getTranslations("Product");
-  return { title: t("metadataFallback") };
+/** Avoid "Name | Boravin | Boravin" when seoTitle already includes the site name. */
+function pageTitle(raw: string | null | undefined, fallback: string) {
+  const value = (raw ?? fallback).trim();
+  return value.replace(/\s*\|\s*Boravin\s*$/i, "").trim() || fallback;
 }
 
-async function loadProduct(slug: string) {
+const loadProduct = cache(async (slug: string) => {
   const run = async () => {
     const database = getDb();
     const product = await database.query.products.findFirst({
@@ -91,6 +72,25 @@ async function loadProduct(slug: string) {
     console.error("[product] load failed", error);
     return null;
   }
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await loadProduct(slug);
+  if (product) {
+    return {
+      title: pageTitle(product.seoTitle, product.name),
+      description: product.seoDescription ?? product.shortDescription ?? undefined,
+    };
+  }
+  const mock = findMockProduct(slug);
+  if (mock) return { title: mock.name, description: mock.brandName ?? undefined };
+  const t = await getTranslations("Product");
+  return { title: t("metadataFallback") };
 }
 
 export default async function ProductDetailPage({
@@ -107,7 +107,7 @@ export default async function ProductDetailPage({
   if (!product) {
     const mock = findMockProduct(slug);
     if (!mock) notFound();
-    const related = await loadProductCards({ limit: 4 });
+    const related = await loadCachedProductCards({ limit: 4 });
     const price = Number(mock.price);
     const compare = mock.compareAtPrice ? Number(mock.compareAtPrice) : null;
     return (
@@ -167,18 +167,6 @@ export default async function ProductDetailPage({
     );
   }
 
-  const related = await loadProductCards({ limit: 4 });
-  let defaultReviewName = "";
-  try {
-    const customer = await getCurrentCustomer();
-    if (customer) {
-      defaultReviewName = [customer.firstName, customer.lastName]
-        .filter(Boolean)
-        .join(" ");
-    }
-  } catch {
-    defaultReviewName = "";
-  }
   const images = [...(product.images ?? [])].sort(
     (a, b) =>
       Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder,
@@ -380,25 +368,56 @@ export default async function ProductDetailPage({
         </DetailCard>
       </section>
 
-      <ProductReviewsSection
-        productId={product.id}
-        defaultName={defaultReviewName || undefined}
-      />
+      <Suspense
+        fallback={
+          <div className="mt-10 h-40 animate-pulse rounded-[var(--radius-lg)] bg-[#e2e7ec] sm:mt-12" />
+        }
+      >
+        <ProductReviewsSection productId={product.id} />
+      </Suspense>
 
-      <section className="mt-12 sm:mt-14">
-        <div className="mb-5 flex items-end justify-between gap-4 border-b border-[var(--bv-border)] pb-3">
-          <h2 className="font-display text-xl font-semibold sm:text-2xl">
-            {t("related")}
-          </h2>
-          <Link
-            href="/urunler"
-            className="shrink-0 text-sm font-medium text-[var(--bv-teal)]"
-          >
-            {t("allProducts")}
-          </Link>
-        </div>
-        <ProductGrid products={related.filter((p) => p.id !== product.id)} />
-      </section>
+      <Suspense
+        fallback={
+          <div className="mt-12 h-56 animate-pulse rounded-[var(--radius-lg)] bg-[#e2e7ec] sm:mt-14" />
+        }
+      >
+        <RelatedProductsSection
+          excludeId={product.id}
+          title={t("related")}
+          allLabel={t("allProducts")}
+        />
+      </Suspense>
     </div>
+  );
+}
+
+async function RelatedProductsSection({
+  excludeId,
+  title,
+  allLabel,
+}: {
+  excludeId: string;
+  title: string;
+  allLabel: string;
+}) {
+  const related = await loadCachedProductCards({ limit: 4 });
+  const products = related.filter((p) => p.id !== excludeId);
+  if (!products.length) return null;
+
+  return (
+    <section className="mt-12 sm:mt-14">
+      <div className="mb-5 flex items-end justify-between gap-4 border-b border-[var(--bv-border)] pb-3">
+        <h2 className="font-display text-xl font-semibold sm:text-2xl">
+          {title}
+        </h2>
+        <Link
+          href="/urunler"
+          className="shrink-0 text-sm font-medium text-[var(--bv-teal)]"
+        >
+          {allLabel}
+        </Link>
+      </div>
+      <ProductGrid products={products} />
+    </section>
   );
 }
